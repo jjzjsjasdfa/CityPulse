@@ -4,6 +4,7 @@ import {
   Alert,
   Linking,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   Share,
@@ -14,6 +15,7 @@ import {
 } from 'react-native';
 
 import type { EventDetail } from '../api/types';
+import { eventLink } from '../eventLinks';
 import { categoryColors, categoryLabels, colors, formatDate, statusLabels } from '../theme';
 
 interface Props {
@@ -29,9 +31,35 @@ export function DetailSheet({ event, loading, saved, onClose, onToggleSaved, onS
   const [showCorrection, setShowCorrection] = useState(false);
   const [message, setMessage] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [shareError, setShareError] = useState(false);
 
   if (!event) return null;
   const accent = categoryColors[event.category];
+  const shareUrl = eventLink(event.id);
+
+  const openMap = async () => {
+    const { latitude, longitude } = event.location;
+    try {
+      await Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${latitude},${longitude}`)}`);
+    } catch {
+      Alert.alert('无法打开地图', '请稍后重试，或将地址复制到地图软件中搜索。');
+    }
+  };
+
+  const shareEvent = async () => {
+    setShareError(false);
+    const text = `${event.name}${event.is_demo ? '（演示活动）' : ''}\n${formatDate(event.starts_at)}\n${event.location.venue_name}\n在城迹 CityPulse 打开活动：\n${shareUrl}`;
+    try {
+      if (Platform.OS === 'web') {
+        if (navigator.share) await navigator.share({ title: event.name, text });
+        else setShareError(true);
+      } else {
+        await Share.share({ title: event.name, message: text });
+      }
+    } catch (error) {
+      if (!(error instanceof Error && error.name === 'AbortError')) setShareError(true);
+    }
+  };
 
   const submit = async () => {
     if (message.trim().length < 10) {
@@ -81,7 +109,9 @@ export function DetailSheet({ event, loading, saved, onClose, onToggleSaved, onS
             <Text style={styles.value}>{formatDate(event.starts_at)}</Text>
             <Text style={styles.label}>地点</Text>
             <Text style={styles.value}>{event.location.venue_name}</Text>
-            <Text style={styles.subValue}>{event.location.address}</Text>
+            <Pressable accessibilityRole="link" accessibilityLabel={`${event.location.address}，在 Google 地图中打开`} onPress={openMap} style={styles.addressButton}>
+              <Text style={[styles.subValue, styles.addressLink]}>{event.location.address} ↗</Text>
+            </Pressable>
           </View>
           <View style={styles.statusCard}>
             <View style={styles.statusTop}>
@@ -155,15 +185,23 @@ export function DetailSheet({ event, loading, saved, onClose, onToggleSaved, onS
           )}
           <View style={styles.actions}>
             <Pressable
-              onPress={() => Share.share({ message: `${event.name}\n${event.official_url}` })}
+              accessibilityRole="button"
+              accessibilityLabel="分享活动"
+              onPress={shareEvent}
               style={styles.shareButton}
             >
-              <Text style={styles.shareText}>分享</Text>
+              <Text style={styles.shareText}>分享活动</Text>
             </Pressable>
             <Pressable onPress={() => Linking.openURL(event.official_url)} style={styles.officialButton}>
               <Text style={styles.officialText}>前往官方页面 ↗</Text>
             </Pressable>
           </View>
+          {shareError && (
+            <View style={styles.correctionBox}>
+              <Text style={styles.subValue}>可复制以下链接，发给已安装 CityPulse 的朋友：</Text>
+              <Text selectable style={styles.addressLink}>{shareUrl}</Text>
+            </View>
+          )}
           <Text style={styles.disclaimer}>报名、购票及变更信息请以主办方官方页面为准。</Text>
         </ScrollView>
       </View>
@@ -203,6 +241,8 @@ const styles = StyleSheet.create({
   label: { color: colors.orange, fontSize: 11, fontWeight: '900', letterSpacing: 1.4, marginTop: 10 },
   value: { color: colors.ink, fontSize: 20, lineHeight: 27, fontWeight: '900', marginTop: 5 },
   subValue: { color: colors.inkMuted, fontSize: 13, marginTop: 4 },
+  addressButton: { minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start' },
+  addressLink: { color: colors.green, textDecorationLine: 'underline', lineHeight: 22 },
   statusCard: { marginHorizontal: 20, backgroundColor: colors.ink, borderRadius: 18, padding: 16 },
   statusTop: { flexDirection: 'row', justifyContent: 'space-between' },
   status: { color: colors.white, fontWeight: '900', fontSize: 16 },

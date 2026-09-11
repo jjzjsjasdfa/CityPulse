@@ -1,13 +1,14 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Linking, Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
 
 import { getEvent, listEvents, listMapEvents, submitCorrection } from './src/api/client';
 import type { EventDetail, EventSummary, MapEvent } from './src/api/types';
 import { DetailSheet } from './src/components/DetailSheet';
 import type { FilterValue } from './src/components/FilterBar';
 import { FALLBACK_EVENTS, fallbackDetail } from './src/data/fallback';
+import { eventIdFromLink } from './src/eventLinks';
 import { FeedScreen } from './src/screens/FeedScreen';
 import { MapScreen } from './src/screens/MapScreen';
 import { SavedScreen } from './src/screens/SavedScreen';
@@ -44,6 +45,37 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
   const [offline, setOffline] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    let request = 0;
+    const openSharedEvent = async (url: string | null) => {
+      const id = url ? eventIdFromLink(url) : null;
+      if (!id) return;
+      const current = ++request;
+      const demo = FALLBACK_EVENTS.find((event) => event.id === id);
+      setTab('feed');
+      setDetail(demo ? fallbackDetail(demo) : null);
+      setDetailLoading(!demo);
+      if (demo) return;
+      try {
+        const event = await getEvent(id);
+        if (active && current === request) {
+          setDetail(event);
+          setKnownEvents((events) => [...events.filter((item) => item.id !== event.id), event]);
+        }
+      } catch {
+        if (active && current === request) Alert.alert('无法打开活动', '活动可能已下架，或网络暂时不可用。请稍后重新打开链接。');
+      } finally {
+        if (active && current === request) setDetailLoading(false);
+      }
+    };
+    const subscription = Linking.addEventListener('url', ({ url }) => { void openSharedEvent(url); });
+    void Linking.getInitialURL().then((url) => {
+      if (active && request === 0) void openSharedEvent(url);
+    }).catch(() => undefined);
+    return () => { active = false; subscription.remove(); };
+  }, []);
 
   useEffect(() => {
     AsyncStorage.getItem(SAVED_KEY)
@@ -199,6 +231,7 @@ export default function App() {
         })}
       </View>
       <DetailSheet
+        key={detail?.id ?? 'closed'}
         event={detail}
         loading={detailLoading}
         saved={detail ? savedIds.has(detail.id) : false}
