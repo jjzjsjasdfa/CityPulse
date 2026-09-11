@@ -3,6 +3,9 @@
 一个“可信、结构化、可定位”的单城活动发现 MVP。项目采用契约先行：FastAPI
 输出 OpenAPI，React Native 客户端只使用由该契约生成的类型。
 
+New to the backend? Read the line-by-line architecture guide:
+[doc/BACKEND_STRUCTURE.md](doc/BACKEND_STRUCTURE.md).
+
 本仓库参考了
 [Full Stack FastAPI Template](https://github.com/fastapi/full-stack-fastapi-template)
 的 FastAPI、SQLModel、PostgreSQL、Alembic、Docker Compose 和自动客户端思路；

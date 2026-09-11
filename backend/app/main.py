@@ -12,8 +12,8 @@ from app.core.database import engine
 
 app = FastAPI(
     title=settings.app_name,
-    version="0.1.0",
-    description="可信、结构化、可定位的城市动态事件 API。",
+    version=settings.app_version,
+    description=settings.app_description,
 )
 app.add_middleware(
     CORSMiddleware,

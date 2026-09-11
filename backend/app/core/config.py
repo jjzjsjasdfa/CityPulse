@@ -5,6 +5,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     app_name: str = "城迹 CityPulse API"
+    app_version: str = "0.1.0"
+    app_description: str = "可信、结构化、可定位的城市动态事件 API。"
     api_v1_prefix: str = "/api/v1"
     database_url: str = (
         "postgresql+psycopg://citypulse:citypulse-dev@localhost:5432/citypulse"
