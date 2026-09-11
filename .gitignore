@@ -1,0 +1,17 @@
+.env
+.DS_Store
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.venv/
+.python/
+.uv-cache/
+backend/.venv/
+mobile/.expo/
+mobile/node_modules/
+mobile/dist/
+mobile/dist-preview/
+mobile/artifacts/
+.edge-preview*/
+.chrome-preview*/
