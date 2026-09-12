@@ -192,6 +192,8 @@ export interface components {
             location: components["schemas"]["Location"];
             /** Organizer */
             organizer: string;
+            /** Price */
+            price?: string | null;
             status: components["schemas"]["EventStatus"];
             /**
              * Last Verified At
@@ -261,6 +263,8 @@ export interface components {
             location: components["schemas"]["Location"];
             /** Organizer */
             organizer: string;
+            /** Price */
+            price?: string | null;
             status: components["schemas"]["EventStatus"];
             /**
              * Last Verified At

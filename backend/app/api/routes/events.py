@@ -53,6 +53,7 @@ def _summary(event: Event, now: datetime | None = None) -> EventSummary:
             longitude=event.longitude,
         ),
         organizer=event.organizer,
+        price=event.price,
         status=event.status,
         last_verified_at=event.last_verified_at,
         confidence=event.confidence,

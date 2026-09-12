@@ -26,6 +26,7 @@ class EventSummary(BaseModel):
     ends_at: datetime
     location: Location
     organizer: str
+    price: str | None = None
     status: EventStatus
     last_verified_at: datetime
     confidence: float
@@ -139,4 +140,3 @@ class EventFilters(BaseModel):
     category: EventCategory | None = None
     attribute: str | None = None
     sort: Literal["newest", "soonest", "ending_soon"] = "soonest"
-

@@ -78,6 +78,7 @@ dependencies = [
     { name = "alembic" },
     { name = "fastapi", extra = ["standard"] },
     { name = "geoalchemy2" },
+    { name = "httpx" },
     { name = "psycopg", extra = ["binary"] },
     { name = "pydantic-settings" },
     { name = "sqlmodel" },
@@ -85,7 +86,6 @@ dependencies = [
 
 [package.optional-dependencies]
 dev = [
-    { name = "httpx" },
     { name = "pytest" },
     { name = "ruff" },
 ]
@@ -95,7 +95,7 @@ requires-dist = [
     { name = "alembic", specifier = ">=1.16.0,<2" },
     { name = "fastapi", extras = ["standard"], specifier = ">=0.116.0,<1" },
     { name = "geoalchemy2", specifier = ">=0.18.0,<1" },
-    { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.28.0,<1" },
+    { name = "httpx", specifier = ">=0.28.0,<1" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.2.0,<4" },
     { name = "pydantic-settings", specifier = ">=2.10.0,<3" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.4.0,<9" },
