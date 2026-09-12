@@ -626,6 +626,17 @@
             "type": "string",
             "title": "Organizer"
           },
+          "price": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price"
+          },
           "status": {
             "$ref": "#/components/schemas/EventStatus"
           },
@@ -792,6 +803,17 @@
           "organizer": {
             "type": "string",
             "title": "Organizer"
+          },
+          "price": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price"
           },
           "status": {
             "$ref": "#/components/schemas/EventStatus"

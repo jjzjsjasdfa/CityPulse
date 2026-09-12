@@ -107,6 +107,12 @@ export function DetailSheet({ event, loading, saved, onClose, onToggleSaved, onS
           <View style={styles.primaryInfo}>
             <Text style={styles.label}>时间</Text>
             <Text style={styles.value}>{formatDate(event.starts_at)}</Text>
+            {event.price && (
+              <>
+                <Text style={styles.label}>价格</Text>
+                <Text style={styles.value}>{event.price}</Text>
+              </>
+            )}
             <Text style={styles.label}>地点</Text>
             <Text style={styles.value}>{event.location.venue_name}</Text>
             <Pressable accessibilityRole="link" accessibilityLabel={`${event.location.address}，在 Google 地图中打开`} onPress={openMap} style={styles.addressButton}>

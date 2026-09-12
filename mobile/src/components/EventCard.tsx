@@ -39,6 +39,7 @@ export function EventCard({ event, saved, onPress, onToggleSaved }: Props) {
             {event.is_demo && <Text style={styles.demoBadge}>演示</Text>}
           </View>
           <Text style={styles.date}>{formatDate(event.starts_at)}</Text>
+          {event.price && <Text style={styles.price}>{event.price}</Text>}
           <Text numberOfLines={2} style={styles.summary}>
             {event.summary}
           </Text>
@@ -135,6 +136,7 @@ const styles = StyleSheet.create({
     fontSize: 11,
   },
   date: { color: colors.ink, fontWeight: '900', fontSize: 18, marginTop: 8 },
+  price: { color: colors.orange, fontWeight: '900', fontSize: 15, marginTop: 6 },
   summary: { color: colors.inkMuted, fontSize: 14, lineHeight: 21, marginTop: 8 },
   location: { color: colors.ink, fontSize: 13, fontWeight: '700', marginTop: 13 },
   footer: {

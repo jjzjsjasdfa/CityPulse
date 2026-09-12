@@ -4,7 +4,7 @@ from typing import Any
 from uuid import UUID, uuid4
 
 from geoalchemy2 import Geography
-from sqlalchemy import JSON, Column, DateTime, String, Text
+from sqlalchemy import JSON, Column, DateTime, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import Field, SQLModel
 
@@ -46,6 +46,18 @@ class CorrectionStatus(StrEnum):
     rejected = "rejected"
 
 
+class IngestionRunStatus(StrEnum):
+    running = "running"
+    succeeded = "succeeded"
+    failed = "failed"
+
+
+class CandidateReviewStatus(StrEnum):
+    pending = "pending"
+    approved = "approved"
+    rejected = "rejected"
+
+
 class Source(SQLModel, table=True):
     __tablename__ = "sources"
 
@@ -82,6 +94,7 @@ class Event(SQLModel, table=True):
         sa_column=Column(Geography(geometry_type="POINT", srid=4326), nullable=False)
     )
     organizer: str = Field(max_length=180)
+    price: str | None = Field(default=None, max_length=80)
     status: EventStatus = Field(sa_column=Column(String(32), nullable=False))
     last_verified_at: datetime = Field(sa_column=Column(DateTime(timezone=True), nullable=False))
     confidence: float = Field(ge=0, le=1)
@@ -146,3 +159,82 @@ class Correction(SQLModel, table=True):
         sa_column=Column(DateTime(timezone=True), nullable=False),
     )
 
+
+class IngestionRun(SQLModel, table=True):
+    __tablename__ = "ingestion_runs"
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    source_id: UUID = Field(foreign_key="sources.id", ondelete="CASCADE", index=True)
+    status: IngestionRunStatus = Field(sa_column=Column(String(32), nullable=False))
+    started_at: datetime = Field(sa_column=Column(DateTime(timezone=True), nullable=False))
+    finished_at: datetime | None = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
+    discovered_count: int = 0
+    changed_count: int = 0
+    candidate_count: int = 0
+    error_message: str | None = Field(default=None, sa_column=Column(Text, nullable=True))
+
+
+class RawSourceItem(SQLModel, table=True):
+    __tablename__ = "raw_source_items"
+    __table_args__ = (
+        UniqueConstraint("source_id", "external_id", name="uq_raw_source_item_identity"),
+    )
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    source_id: UUID = Field(foreign_key="sources.id", ondelete="CASCADE", index=True)
+    external_id: str = Field(max_length=64)
+    canonical_url: str = Field(max_length=500)
+    title: str = Field(max_length=300)
+    content_hash: str = Field(max_length=64)
+    payload: dict[str, Any] = Field(
+        default_factory=dict,
+        sa_column=Column(JSONB().with_variant(JSON(), "sqlite"), nullable=False),
+    )
+    fetched_at: datetime = Field(sa_column=Column(DateTime(timezone=True), nullable=False))
+    first_seen_at: datetime = Field(sa_column=Column(DateTime(timezone=True), nullable=False))
+    last_seen_at: datetime = Field(sa_column=Column(DateTime(timezone=True), nullable=False))
+
+
+class EventCandidate(SQLModel, table=True):
+    __tablename__ = "event_candidates"
+    __table_args__ = (UniqueConstraint("raw_item_id", name="uq_event_candidate_raw_item"),)
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    raw_item_id: UUID = Field(foreign_key="raw_source_items.id", ondelete="CASCADE")
+    source_id: UUID = Field(foreign_key="sources.id", ondelete="CASCADE", index=True)
+    name: str = Field(max_length=300)
+    category: EventCategory = Field(sa_column=Column(String(32), nullable=False))
+    organizer: str | None = Field(default=None, max_length=180)
+    price: str | None = Field(default=None, max_length=80)
+    venue_name: str | None = Field(default=None, max_length=200)
+    address: str | None = Field(default=None, max_length=300)
+    city: str | None = Field(default=None, max_length=80, index=True)
+    district: str | None = Field(default=None, max_length=80)
+    source_status: str | None = Field(default=None, max_length=32)
+    source_published_at: datetime | None = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
+    starts_at: datetime | None = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
+    ends_at: datetime | None = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
+    official_url: str = Field(max_length=500)
+    fingerprint: str = Field(max_length=64, index=True)
+    facts: dict[str, Any] = Field(
+        default_factory=dict,
+        sa_column=Column(JSONB().with_variant(JSON(), "sqlite"), nullable=False),
+    )
+    review_status: CandidateReviewStatus = Field(
+        default=CandidateReviewStatus.pending,
+        sa_column=Column(String(32), nullable=False),
+    )
+    created_at: datetime = Field(sa_column=Column(DateTime(timezone=True), nullable=False))
+    updated_at: datetime = Field(sa_column=Column(DateTime(timezone=True), nullable=False))

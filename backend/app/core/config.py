@@ -12,6 +12,10 @@ class Settings(BaseSettings):
         "postgresql+psycopg://citypulse:citypulse-dev@localhost:5432/citypulse"
     )
     backend_cors_origins: str = "http://localhost:8081,http://localhost:19006"
+    ingestion_user_agent: str = (
+        "CityPulse/0.1 (+https://citypulse.invalid/contact-required)"
+    )
+    hunan_museum_base_url: str = "https://www.hnmuseum.com"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
@@ -26,4 +30,3 @@ def get_settings() -> Settings:
 
 
 settings = get_settings()
-
