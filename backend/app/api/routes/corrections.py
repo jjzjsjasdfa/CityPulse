@@ -13,8 +13,10 @@ SessionDep = Annotated[Session, Depends(get_session)]
 
 @router.post("", response_model=CorrectionResponse, status_code=status.HTTP_202_ACCEPTED)
 def create_correction(payload: CorrectionCreate, session: SessionDep) -> CorrectionResponse:
-    if payload.event_id is not None and session.get(Event, payload.event_id) is None:
-        raise HTTPException(status_code=404, detail="Event not found")
+    if payload.event_id is not None:
+        event = session.get(Event, payload.event_id)
+        if event is None or not event.is_published or event.is_demo:
+            raise HTTPException(status_code=404, detail="Event not found")
 
     correction = Correction(
         event_id=payload.event_id,
@@ -27,4 +29,3 @@ def create_correction(payload: CorrectionCreate, session: SessionDep) -> Correct
     session.commit()
     session.refresh(correction)
     return CorrectionResponse(data=correction)
-

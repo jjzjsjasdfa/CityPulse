@@ -31,6 +31,7 @@ async def http_error_handler(_: Request, exc: HTTPException) -> JSONResponse:
     details = None if isinstance(exc.detail, str) else exc.detail
     return JSONResponse(
         status_code=exc.status_code,
+        headers=exc.headers,
         content={
             "error": {
                 "code": f"http_{exc.status_code}",
@@ -49,7 +50,10 @@ async def validation_error_handler(_: Request, exc: RequestValidationError) -> J
             "error": {
                 "code": "validation_error",
                 "message": "Request validation failed",
-                "details": jsonable_encoder(exc.errors()),
+                "details": jsonable_encoder([
+                    {"loc": error["loc"], "msg": error["msg"], "type": error["type"]}
+                    for error in exc.errors()
+                ]),
             }
         },
     )

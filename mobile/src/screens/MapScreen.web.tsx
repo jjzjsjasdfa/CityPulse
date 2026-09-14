@@ -1,79 +1,51 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+﻿import { useEffect, useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import type { MapEvent } from '../api/types';
-import { categoryColors, categoryLabels, colors, formatDate } from '../theme';
+import { colors, formatDate } from '../theme';
 
 interface Props {
   points: MapEvent[];
   onBoundsChange: (bounds: { west: number; south: number; east: number; north: number }) => void;
   onSelectId: (id: string) => void;
 }
+const cityBounds = { west: 112.86, south: 28.10, east: 113.06, north: 28.32 };
 
-export function MapScreen({ points, onSelectId }: Props) {
-  return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.eyebrow}>附近正在发生</Text>
-          <Text style={styles.title}>长沙地图</Text>
-        </View>
-        <View style={styles.countPill}><Text style={styles.countText}>{points.length} 个点位</Text></View>
-      </View>
-      <View style={styles.map}>
-        <View style={styles.river} />
-        {points.map((point, index) => (
-          <Pressable
-            key={point.id}
-            onPress={() => onSelectId(point.id)}
-            style={[
-              styles.pin,
-              {
-                backgroundColor: categoryColors[point.category],
-                left: `${14 + ((index * 21) % 68)}%`,
-                top: `${20 + ((index * 17) % 57)}%`,
-              },
-            ]}
-          >
-            <Text style={styles.pinText}>{index + 1}</Text>
-          </Pressable>
-        ))}
-        <Text style={styles.notice}>网页为示意底图 · 在 Expo Go 查看原生地图</Text>
-      </View>
-      <View style={styles.list}>
-        {points.slice(0, 3).map((point) => (
-          <Pressable key={point.id} onPress={() => onSelectId(point.id)} style={styles.listItem}>
-            <View style={[styles.dot, { backgroundColor: categoryColors[point.category] }]} />
-            <View style={{ flex: 1 }}>
-              <Text style={styles.name}>{point.name}</Text>
-              <Text style={styles.meta}>{categoryLabels[point.category]} · {formatDate(point.starts_at)}</Text>
-            </View>
-          </Pressable>
-        ))}
-      </View>
+export function MapScreen({ points, onBoundsChange, onSelectId }: Props) {
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  useEffect(() => { onBoundsChange(cityBounds); }, [onBoundsChange]);
+  const selected = points.find((point) => point.id === selectedId);
+  const bounds = selected ? {
+    west: selected.longitude - 0.02, south: selected.latitude - 0.02,
+    east: selected.longitude + 0.02, north: selected.latitude + 0.02,
+  } : cityBounds;
+  const params = new URLSearchParams({ bbox: `${bounds.west},${bounds.south},${bounds.east},${bounds.north}`, layer: 'mapnik' });
+  if (selected) params.set('marker', `${selected.latitude},${selected.longitude}`);
+  return <ScrollView contentContainerStyle={styles.container}>
+    <Text style={styles.title}>长沙地图</Text>
+    <Text style={styles.copy}>选择活动，在地图中查看核验位置。</Text>
+    <iframe title="长沙活动位置 · OpenStreetMap" src={`https://www.openstreetmap.org/export/embed.html?${params}`} style={{ width: '100%', height: 340, border: 0, borderRadius: 16 }} loading="lazy" />
+    <View style={styles.row}>
+      <Text style={styles.copy}>{points.length} 个活动 · 长沙中心城区</Text>
+      <Pressable accessibilityRole="button" onPress={() => onBoundsChange(cityBounds)}><Text style={styles.link}>刷新活动</Text></Pressable>
     </View>
-  );
+    {points.length === 0 && <Text style={styles.copy}>该区域暂无已审核的活动。</Text>}
+    {points.map((point) => <View key={point.id} style={styles.card}>
+      <Pressable accessibilityRole="button" onPress={() => setSelectedId(point.id)}>
+        <Text style={styles.name}>{point.name}</Text>
+        <Text style={styles.copy}>{formatDate(point.starts_at)} · 在地图中定位</Text>
+      </Pressable>
+      <Pressable accessibilityRole="button" onPress={() => onSelectId(point.id)}><Text style={styles.link}>活动详情 →</Text></Pressable>
+    </View>)}
+  </ScrollView>;
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.paper, paddingTop: 105 },
-  header: {
-    position: 'absolute', top: 18, left: 18, right: 18, flexDirection: 'row',
-    justifyContent: 'space-between', alignItems: 'center', backgroundColor: colors.white,
-    padding: 16, borderRadius: 19, borderWidth: 1, borderColor: colors.line,
-  },
-  eyebrow: { color: colors.orange, fontSize: 11, fontWeight: '900', letterSpacing: 1.5 },
-  title: { color: colors.ink, fontSize: 25, fontWeight: '900', marginTop: 3 },
-  countPill: { backgroundColor: colors.ink, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 999 },
-  countText: { color: colors.white, fontSize: 12, fontWeight: '800' },
-  map: { height: 330, margin: 18, borderRadius: 24, backgroundColor: '#DCE5DF', overflow: 'hidden', borderWidth: 1, borderColor: colors.line },
-  river: { position: 'absolute', width: 54, height: 440, backgroundColor: '#9BCAD0', left: '48%', top: -45, transform: [{ rotate: '8deg' }] },
-  pin: { position: 'absolute', width: 36, height: 36, borderRadius: 18, borderWidth: 3, borderColor: colors.white, alignItems: 'center', justifyContent: 'center' },
-  pinText: { color: colors.white, fontWeight: '900' },
-  notice: { position: 'absolute', bottom: 12, alignSelf: 'center', color: colors.ink, backgroundColor: 'rgba(255,253,248,0.88)', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10, fontSize: 11 },
-  list: { paddingHorizontal: 18 },
-  listItem: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.white, padding: 14, borderRadius: 16, marginBottom: 9 },
-  dot: { width: 11, height: 11, borderRadius: 6 },
-  name: { color: colors.ink, fontWeight: '800', fontSize: 14 },
-  meta: { color: colors.inkMuted, fontSize: 12, marginTop: 3 },
+  container: { padding: 20, paddingBottom: 80 },
+  title: { color: colors.ink, fontSize: 28, fontWeight: '900' },
+  copy: { color: colors.inkMuted, marginVertical: 10, lineHeight: 20 },
+  row: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' },
+  card: { padding: 16, backgroundColor: colors.white, borderWidth: 1, borderColor: colors.line, borderRadius: 16, marginBottom: 10 },
+  name: { color: colors.ink, fontSize: 16, fontWeight: '800' },
+  link: { color: colors.green, fontWeight: '700', paddingVertical: 10 },
 });
-

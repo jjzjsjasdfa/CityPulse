@@ -1,4 +1,4 @@
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import MapView, { Marker, type Region } from 'react-native-maps';
 
 import type { MapEvent } from '../api/types';
@@ -25,47 +25,6 @@ const boundsFromRegion = (region: Region) => ({
 });
 
 export function MapScreen({ points, onBoundsChange, onSelectId }: Props) {
-  if (Platform.OS === 'web') {
-    return (
-      <View style={styles.webContainer}>
-        <MapHeader count={points.length} />
-        <View style={styles.webMap}>
-          <View style={styles.river} />
-          {points.map((point, index) => (
-            <Pressable
-              key={point.id}
-              onPress={() => onSelectId(point.id)}
-              style={[
-                styles.webPin,
-                {
-                  backgroundColor: categoryColors[point.category],
-                  left: `${14 + ((index * 21) % 68)}%`,
-                  top: `${20 + ((index * 17) % 57)}%`,
-                },
-              ]}
-            >
-              <Text style={styles.webPinText}>{index + 1}</Text>
-            </Pressable>
-          ))}
-          <Text style={styles.webNotice}>网页预览为示意底图 · 在 Expo Go 查看原生地图</Text>
-        </View>
-        <View style={styles.mapList}>
-          {points.slice(0, 3).map((point) => (
-            <Pressable key={point.id} onPress={() => onSelectId(point.id)} style={styles.mapListItem}>
-              <View style={[styles.listDot, { backgroundColor: categoryColors[point.category] }]} />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.mapListName}>{point.name}</Text>
-                <Text style={styles.mapListMeta}>
-                  {categoryLabels[point.category]} · {formatDate(point.starts_at)}
-                </Text>
-              </View>
-            </Pressable>
-          ))}
-        </View>
-      </View>
-    );
-  }
-
   return (
     <View style={styles.container}>
       <MapView
@@ -137,59 +96,4 @@ const styles = StyleSheet.create({
     borderRadius: 999,
   },
   mapHintText: { color: colors.white, fontSize: 12, fontWeight: '700' },
-  webContainer: { flex: 1, backgroundColor: colors.paper, paddingTop: 105 },
-  webMap: {
-    height: 330,
-    margin: 18,
-    borderRadius: 24,
-    backgroundColor: '#DCE5DF',
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: colors.line,
-  },
-  river: {
-    position: 'absolute',
-    width: 54,
-    height: 440,
-    backgroundColor: '#9BCAD0',
-    left: '48%',
-    top: -45,
-    transform: [{ rotate: '8deg' }],
-  },
-  webPin: {
-    position: 'absolute',
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    borderWidth: 3,
-    borderColor: colors.white,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  webPinText: { color: colors.white, fontWeight: '900' },
-  webNotice: {
-    position: 'absolute',
-    bottom: 12,
-    alignSelf: 'center',
-    color: colors.ink,
-    backgroundColor: 'rgba(255,253,248,0.88)',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 10,
-    fontSize: 11,
-  },
-  mapList: { paddingHorizontal: 18 },
-  mapListItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    backgroundColor: colors.white,
-    padding: 14,
-    borderRadius: 16,
-    marginBottom: 9,
-  },
-  listDot: { width: 11, height: 11, borderRadius: 6 },
-  mapListName: { color: colors.ink, fontWeight: '800', fontSize: 14 },
-  mapListMeta: { color: colors.inkMuted, fontSize: 12, marginTop: 3 },
 });
-

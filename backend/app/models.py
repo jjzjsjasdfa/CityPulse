@@ -58,6 +58,30 @@ class CandidateReviewStatus(StrEnum):
     rejected = "rejected"
 
 
+class UserRole(StrEnum):
+    regular = "regular"
+    admin = "admin"
+
+
+class User(SQLModel, table=True):
+    __tablename__ = "users"
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    email: str = Field(max_length=320, unique=True, index=True)
+    password_hash: str = Field(max_length=256)
+    role: UserRole = Field(default=UserRole.regular, sa_column=Column(String(16), nullable=False))
+    is_active: bool = True
+    created_at: datetime = Field(default_factory=utc_now, sa_type=DateTime(timezone=True))
+
+
+class AuthSession(SQLModel, table=True):
+    __tablename__ = "auth_sessions"
+
+    token_hash: str = Field(max_length=64, primary_key=True)
+    user_id: UUID = Field(foreign_key="users.id", ondelete="CASCADE", index=True)
+    expires_at: datetime = Field(sa_type=DateTime(timezone=True), index=True)
+
+
 class Source(SQLModel, table=True):
     __tablename__ = "sources"
 
@@ -146,6 +170,8 @@ class Correction(SQLModel, table=True):
     message: str = Field(sa_column=Column(Text, nullable=False))
     evidence_url: str | None = Field(default=None, max_length=500)
     contact_email: str | None = Field(default=None, max_length=320)
+    reviewed_by: UUID | None = Field(default=None, foreign_key="users.id")
+    resolution_note: str | None = Field(default=None, max_length=1000)
     status: CorrectionStatus = Field(
         default=CorrectionStatus.pending,
         sa_column=Column(String(32), nullable=False),
@@ -158,6 +184,19 @@ class Correction(SQLModel, table=True):
         default_factory=utc_now,
         sa_column=Column(DateTime(timezone=True), nullable=False),
     )
+
+
+class EventRevision(SQLModel, table=True):
+    __tablename__ = "event_revisions"
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    event_id: UUID = Field(foreign_key="events.id", ondelete="CASCADE", index=True)
+    actor_id: UUID = Field(foreign_key="users.id")
+    correction_id: UUID | None = Field(default=None, foreign_key="corrections.id")
+    note: str = Field(max_length=1000)
+    before: dict = Field(sa_column=Column(JSONB, nullable=False))
+    after: dict = Field(sa_column=Column(JSONB, nullable=False))
+    created_at: datetime = Field(default_factory=utc_now, sa_type=DateTime(timezone=True))
 
 
 class IngestionRun(SQLModel, table=True):
@@ -203,6 +242,10 @@ class EventCandidate(SQLModel, table=True):
     __table_args__ = (UniqueConstraint("raw_item_id", name="uq_event_candidate_raw_item"),)
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
+    event_id: UUID | None = Field(default=None, foreign_key="events.id", unique=True)
+    reviewed_by: UUID | None = Field(default=None, foreign_key="users.id")
+    reviewed_at: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))
+    review_note: str | None = Field(default=None, max_length=1000)
     raw_item_id: UUID = Field(foreign_key="raw_source_items.id", ondelete="CASCADE")
     source_id: UUID = Field(foreign_key="sources.id", ondelete="CASCADE", index=True)
     name: str = Field(max_length=300)
@@ -213,6 +256,8 @@ class EventCandidate(SQLModel, table=True):
     address: str | None = Field(default=None, max_length=300)
     city: str | None = Field(default=None, max_length=80, index=True)
     district: str | None = Field(default=None, max_length=80)
+    latitude: float | None = Field(default=None, ge=-90, le=90)
+    longitude: float | None = Field(default=None, ge=-180, le=180)
     source_status: str | None = Field(default=None, max_length=32)
     source_published_at: datetime | None = Field(
         default=None,
@@ -238,3 +283,7 @@ class EventCandidate(SQLModel, table=True):
     )
     created_at: datetime = Field(sa_column=Column(DateTime(timezone=True), nullable=False))
     updated_at: datetime = Field(sa_column=Column(DateTime(timezone=True), nullable=False))
+
+    @property
+    def enrichment(self) -> dict:
+        return self.facts.get("facts", {}).get("enrichment", {})

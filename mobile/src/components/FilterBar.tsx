@@ -3,10 +3,11 @@ import { Pressable, ScrollView, StyleSheet, Text } from 'react-native';
 import type { EventCategory } from '../api/types';
 import { categoryLabels, colors } from '../theme';
 
-export type FilterValue = 'all' | 'newest' | 'ending_soon' | EventCategory;
+export type FilterValue = 'all' | 'newest' | 'ending_soon' | 'past' | EventCategory;
 
 const options: Array<{ value: FilterValue; label: string }> = [
   { value: 'all', label: '全部' },
+  { value: 'past', label: '往期活动' },
   { value: 'newest', label: '刚上新' },
   { value: 'ending_soon', label: '快结束' },
   { value: 'performance', label: categoryLabels.performance },
@@ -60,4 +61,3 @@ const styles = StyleSheet.create({
   label: { color: colors.ink, fontSize: 13, fontWeight: '700' },
   labelSelected: { color: colors.white },
 });
-

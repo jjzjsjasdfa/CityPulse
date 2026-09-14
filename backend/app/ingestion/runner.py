@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+from dataclasses import replace
 from datetime import UTC, datetime
 
 from sqlmodel import Session, select
@@ -12,6 +13,7 @@ from app.ingestion.registry import adapter_keys, build_adapter
 from app.ingestion.types import IngestionItem, SourceSpec
 from app.models import (
     CandidateReviewStatus,
+    Event,
     EventCandidate,
     IngestionRun,
     IngestionRunStatus,
@@ -24,9 +26,18 @@ def utc_now() -> datetime:
     return datetime.now(UTC)
 
 
-def content_hash(item: IngestionItem) -> str:
-    encoded = json.dumps(item.payload(), ensure_ascii=False, sort_keys=True).encode()
+def _payload_hash(payload: dict) -> str:
+    payload = {"latitude": None, "longitude": None, **payload}
+    # Outages and lookup diagnostics alone must not withdraw an approved event.
+    payload["facts"] = {
+        key: value for key, value in payload.get("facts", {}).items() if key != "enrichment"
+    }
+    encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True).encode()
     return hashlib.sha256(encoded).hexdigest()
+
+
+def content_hash(item: IngestionItem) -> str:
+    return _payload_hash(item.payload())
 
 
 def _get_or_create_source(session: Session, spec: SourceSpec) -> Source:
@@ -48,15 +59,45 @@ def _get_or_create_source(session: Session, spec: SourceSpec) -> Source:
 
 def _upsert_item(session: Session, source: Source, item: IngestionItem) -> tuple[bool, bool]:
     now = utc_now()
-    digest = content_hash(item)
     raw = session.exec(
-        select(RawSourceItem).where(
+        select(RawSourceItem)
+        .where(
             RawSourceItem.source_id == source.id,
             RawSourceItem.external_id == item.external_id,
         )
+        .with_for_update()
     ).first()
+    if raw and item.facts.get("enrichment", {}).get("detail_status") == "unavailable":
+        previous = raw.payload
+        if previous.get("venue_name") == item.venue_name:
+            old_info = previous.get("facts", {}).get("enrichment", {})
+            info = {**item.facts["enrichment"]}
+            for key in (
+                "location_method",
+                "source_coordinates",
+                "detail_url",
+                "venue_url",
+                "time_text",
+            ):
+                if not info.get(key) and old_info.get(key):
+                    info[key] = old_info[key]
+            preserve = {
+                field: previous.get(field)
+                for field in ("address", "district", "latitude", "longitude", "organizer")
+                if getattr(item, field) is None
+            }
+            if (
+                previous.get("starts_at")
+                and item.starts_at
+                and datetime.fromisoformat(previous["starts_at"]) == item.starts_at
+                and item.ends_at is None
+                and previous.get("ends_at")
+            ):
+                preserve["ends_at"] = datetime.fromisoformat(previous["ends_at"])
+            item = replace(item, **preserve, facts={**item.facts, "enrichment": info})
+    digest = content_hash(item)
     created = raw is None
-    changed = created or (raw is not None and raw.content_hash != digest)
+    changed = created or (raw is not None and _payload_hash(raw.payload) != digest)
 
     if raw is None:
         raw = RawSourceItem(
@@ -75,15 +116,15 @@ def _upsert_item(session: Session, source: Source, item: IngestionItem) -> tuple
     else:
         raw.last_seen_at = now
         raw.fetched_at = now
+        raw.content_hash = digest
         if changed:
             raw.canonical_url = item.canonical_url
             raw.title = item.title
-            raw.content_hash = digest
-            raw.payload = item.payload()
+        raw.payload = item.payload()
         session.add(raw)
 
     candidate = session.exec(
-        select(EventCandidate).where(EventCandidate.raw_item_id == raw.id)
+        select(EventCandidate).where(EventCandidate.raw_item_id == raw.id).with_for_update()
     ).first()
     candidate_created = candidate is None
     if candidate is None:
@@ -98,6 +139,8 @@ def _upsert_item(session: Session, source: Source, item: IngestionItem) -> tuple
             address=item.address,
             city=item.city,
             district=item.district,
+            latitude=item.latitude,
+            longitude=item.longitude,
             source_status=item.source_status,
             source_published_at=item.source_published_at,
             starts_at=item.starts_at,
@@ -111,6 +154,12 @@ def _upsert_item(session: Session, source: Source, item: IngestionItem) -> tuple
         )
         session.add(candidate)
     elif changed:
+        if candidate.event_id:
+            event = session.get(Event, candidate.event_id)
+            if event:
+                event.is_published = False
+                event.updated_at = now
+                session.add(event)
         candidate.name = item.title
         candidate.category = item.category
         candidate.organizer = item.organizer
@@ -119,6 +168,8 @@ def _upsert_item(session: Session, source: Source, item: IngestionItem) -> tuple
         candidate.address = item.address
         candidate.city = item.city
         candidate.district = item.district
+        candidate.latitude = item.latitude
+        candidate.longitude = item.longitude
         candidate.source_status = item.source_status
         candidate.source_published_at = item.source_published_at
         candidate.starts_at = item.starts_at
@@ -127,6 +178,13 @@ def _upsert_item(session: Session, source: Source, item: IngestionItem) -> tuple
         candidate.fingerprint = item.fingerprint
         candidate.facts = item.payload()
         candidate.review_status = CandidateReviewStatus.pending
+        candidate.reviewed_by = None
+        candidate.reviewed_at = None
+        candidate.review_note = None
+        candidate.updated_at = now
+        session.add(candidate)
+    elif candidate.facts != item.payload():
+        candidate.facts = item.payload()
         candidate.updated_at = now
         session.add(candidate)
     return changed, candidate_created
@@ -205,7 +263,9 @@ def run(*, source_key: str, limit: int, dry_run: bool) -> dict[str, object]:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Fetch event facts into review staging.")
-    parser.add_argument("source", choices=adapter_keys())
+    parser.add_argument(
+        "source", nargs="?", default="showstart-changsha-concert-hall", choices=adapter_keys()
+    )
     parser.add_argument("--limit", type=int, default=20)
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()

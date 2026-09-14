@@ -18,7 +18,10 @@ def _hunan_museum() -> SourceAdapter:
 
 
 def _showstart_changsha_concert_hall() -> SourceAdapter:
-    return ShowStartVenueAdapter(user_agent=settings.ingestion_user_agent)
+    return ShowStartVenueAdapter(
+        user_agent=settings.ingestion_user_agent,
+        amap_api_key=settings.amap_api_key.get_secret_value() if settings.amap_api_key else None,
+    )
 
 
 _ADAPTER_FACTORIES: dict[str, AdapterFactory] = {
