@@ -2,11 +2,21 @@ from collections import Counter
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
+import pytest
 from fastapi.testclient import TestClient
+from app.core.security import require_admin
 
 from app.demo import app, distance
 from app.demo_data import build_dataset
 from scripts.seed_demo import database_events
+
+
+@pytest.fixture(autouse=True)
+def authorized_demo_data_tests():
+    # Dataset tests isolate business logic; authentication is tested separately.
+    app.dependency_overrides[require_admin] = lambda: None
+    yield
+    app.dependency_overrides.pop(require_admin, None)
 
 
 def test_debug_clock_filters_without_changing_the_server_clock():

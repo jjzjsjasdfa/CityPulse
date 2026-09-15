@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { MapEvent, NearbyEvent } from '../api/types';
-import { demoURL } from '../api/client';
+import { apiFetch, demoURL } from '../api/client';
 import { DEMO_MODE, nearbyRadius } from '../demo';
 import type { Position } from './locationProvider';
 import type { LocationStatus } from './useDeviceLocation';
@@ -32,7 +32,7 @@ export function MapChrome({ offline, incomplete, locationStatus, updatesUnavaila
   const publish = async () => {
     setPublishing(true);
     try {
-      const response = await fetch(demoURL('/demo/publish'), { method: 'POST' });
+      const response = await apiFetch(demoURL('/demo/publish'), { method: 'POST' });
       if (!response.ok) throw new Error();
       onDemoPublished?.(); setMessage('已更新周围 8 个方向的 16 条活动');
     } catch { setMessage('测试服务未连接，请稍后重试'); }

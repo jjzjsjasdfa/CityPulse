@@ -22,7 +22,7 @@ export function LoginScreen({ onLogin }: { onLogin: (session: LoginResponse) => 
   return <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
     <Text style={styles.brand}>CITYPULSE · 长沙</Text>
     <Text style={styles.title}>{creating ? '创建账号' : '欢迎回来'}</Text>
-    <Text style={styles.copy}>登录后发现已审核的城市活动，收藏你想去的地方。</Text>
+    <Text style={styles.copy}>无需登录即可浏览。登录后使用个人账号，管理员可进入管理与调试功能。</Text>
     <Text style={styles.label}>邮箱</Text>
     <TextInput accessibilityLabel="邮箱" autoCapitalize="none" autoComplete="email" keyboardType="email-address" value={email} onChangeText={setEmail} style={styles.input} />
     <Text style={styles.label}>密码（12–128 个字符）</Text>

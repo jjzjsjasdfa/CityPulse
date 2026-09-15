@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { clearSession, demoURL, getEvent, listEvents, setAuthHandler, signOut, submitCorrection } from './src/api/client';
+import { apiFetch, clearSession, demoURL, getEvent, listEvents, setAuthHandler, signOut, submitCorrection } from './src/api/client';
 import { configureDebug, DEFAULT_SETTINGS, DEMO_MODE, storageKey, type DebugSettings } from './src/demo';
 import { SettingsScreen } from './src/screens/SettingsScreen';
 import { useActivityAlerts } from './src/map/useActivityAlerts';
@@ -25,30 +25,35 @@ import { LoginScreen } from './src/screens/LoginScreen';
 import { AdminWorkspace } from './src/screens/AdminWorkspace';
 import { colors } from './src/theme';
 
-type Tab = 'feed' | 'map' | 'saved' | 'settings' | 'admin';
+type Tab = 'feed' | 'map' | 'saved' | 'settings' | 'admin' | 'login';
 const SETTINGS_KEY = '@citypulse/settings-v1';
 
 export default function App() {
   const [auth, setAuth] = useState<LoginResponse | null>(null);
-  useEffect(() => { setAuthHandler(() => setAuth(null)); }, []);
+  const [landing, setLanding] = useState<Tab>('feed');
+  const endSession = () => { clearSession(); setAuth(null); setLanding('feed'); setSettings(previous => previous ? { ...previous, enabled: false, time: null } : previous); };
+  useEffect(() => { setAuthHandler(endSession); }, []);
   useEffect(() => {
     if (!auth) return;
-    const timer = setTimeout(() => { clearSession(); setAuth(null); }, Math.max(0, Date.parse(auth.expires_at) - Date.now()));
+    const timer = setTimeout(() => { endSession(); }, Math.max(0, Date.parse(auth.expires_at) - Date.now()));
     return () => clearTimeout(timer);
   }, [auth]);
-  const logout = async () => { await signOut(); setAuth(null); };
+  const logout = async () => { try { await signOut(); } finally { endSession(); } };
   const [settings, setSettings] = useState<DebugSettings | null>(null);
   const [revision, setRevision] = useState(0);
   useEffect(() => { void AsyncStorage.getItem(SETTINGS_KEY).then((value) => {
     let next = DEFAULT_SETTINGS;
     try { const saved = JSON.parse(value ?? 'null'); if (typeof saved?.enabled === 'boolean') next = { enabled: saved.enabled, time: typeof saved.time === 'string' && Number.isFinite(Date.parse(saved.time)) ? saved.time : null,
       radiusKm: Number.isFinite(saved.radiusKm) ? (saved.radiusKm === 15 && saved.cycleSeconds == null ? 7 : Math.max(0,Math.min(30,saved.radiusKm))) : 7, monitor: saved.monitor !== false,
-      cycleSeconds: Number.isFinite(saved.cycleSeconds) ? Math.max(0.5, Math.min(5, saved.cycleSeconds)) : 1 }; } catch {}
+      cycleSeconds: Number.isFinite(saved.cycleSeconds) ? Math.max(0.5, Math.min(5, saved.cycleSeconds)) : 1, amap: saved.amap === true }; } catch {}
+    next = { ...next, enabled: false, time: null };
     configureDebug(next); setSettings(next);
   }).catch(() => { configureDebug(DEFAULT_SETTINGS); setSettings(DEFAULT_SETTINGS); }); }, []);
   const apply = async (next: DebugSettings, replay = false) => {
+    if (auth?.user.role !== 'admin') { next = { ...next, enabled: false, time: null, monitor: false }; replay = false; }
     await AsyncStorage.setItem(SETTINGS_KEY, JSON.stringify(next));
     // Unmount old subscriptions before switching clock, API and storage namespace.
+    setLanding('map');
     setSettings(null);
     await new Promise((resolve) => setTimeout(resolve, 0));
     configureDebug(next);
@@ -60,27 +65,26 @@ export default function App() {
         if (raw) { const record = JSON.parse(raw); record.watermark = null; await AsyncStorage.setItem(storageKey('nearby-updates-v2'), JSON.stringify(record)); }
       }
       if (replay) {
-        try { const response = await fetch(demoURL('/demo/publish'), { method: 'POST' }); if (!response.ok) throw new Error(); }
+        try { const response = await apiFetch(demoURL('/demo/publish'), { method: 'POST' }); if (!response.ok) throw new Error(); }
         catch { Alert.alert('测试服务未连接', '设置已应用，模拟发布失败。请启动测试 API 后重试。'); }
       }
     } } finally { setRevision((r) => r + 1); setSettings(next); }
   };
-  if (!settings) return <View style={{ flex: 1, backgroundColor: colors.paper }} />;
+  const effectiveSettings = useMemo(() => {
+    if (!settings) return null;
+    const next = auth?.user.role === 'admin' ? settings : { ...settings, enabled: false, time: null, monitor: false };
+    configureDebug(next); return next;
+  }, [settings, auth]);
+  if (!effectiveSettings) return <View style={{ flex: 1, backgroundColor: colors.paper }} />;
   return <SafeAreaProvider>
-    {!settings.enabled && !auth ? <LoginGate onLogin={setAuth} /> :
-      <CityPulse key={`${revision}/${settings.enabled ? 'demo' : auth?.user.id}`} initialTab={revision > 0 || settings.enabled ? 'map' : 'feed'} auth={auth} onLogout={logout} settings={settings} onApplySettings={apply} />}
+    <CityPulse key={`${revision}/${effectiveSettings.enabled}/${auth?.user.id ?? 'guest'}`} initialTab={landing} auth={auth} onLogin={(session) => { setLanding('settings'); setAuth(session); }} onLogout={logout} settings={effectiveSettings} onApplySettings={apply} />
   </SafeAreaProvider>;
 }
 
-function LoginGate({ onLogin }: { onLogin: (session: LoginResponse) => void }) {
+function CityPulse({ initialTab, auth, onLogin, onLogout, settings, onApplySettings }: { initialTab: Tab; auth: LoginResponse | null; onLogin: (session: LoginResponse) => void; onLogout: () => Promise<void>; settings: DebugSettings; onApplySettings: (settings: DebugSettings, replay?: boolean) => Promise<void> }) {
   const insets = useSafeAreaInsets();
-  return <View style={[styles.safeArea, { paddingTop: insets.top, paddingBottom: insets.bottom }]}><StatusBar style="dark" /><LoginScreen onLogin={onLogin} /></View>;
-}
-
-function CityPulse({ initialTab, auth, onLogout, settings, onApplySettings }: { initialTab: Tab; auth: LoginResponse | null; onLogout: () => Promise<void>; settings: DebugSettings; onApplySettings: (settings: DebugSettings, replay?: boolean) => Promise<void> }) {
-  const insets = useSafeAreaInsets();
-  const [SAVED_KEY] = useState(() => settings.enabled ? storageKey('saved-events') : `@citypulse/saved-events/${auth!.user.id}`);
-  const [SAVED_DATA_KEY] = useState(() => settings.enabled ? storageKey('saved-event-data') : `@citypulse/saved-event-data/${auth!.user.id}`);
+  const [SAVED_KEY] = useState(() => settings.enabled ? storageKey('saved-events') : `@citypulse/saved-events/${auth?.user.id ?? 'guest'}`);
+  const [SAVED_DATA_KEY] = useState(() => settings.enabled ? storageKey('saved-event-data') : `@citypulse/saved-event-data/${auth?.user.id ?? 'guest'}`);
   const [tab, setTab] = useState<Tab>(initialTab);
   const mapSession = useRef<MapSession>({ located: false });
   const [filter, setFilter] = useState<FilterValue>('all');
@@ -148,7 +152,7 @@ function CityPulse({ initialTab, auth, onLogout, settings, onApplySettings }: { 
     AsyncStorage.multiGet([SAVED_KEY, SAVED_DATA_KEY]).then(async (entries) => {
       const values = new Map(entries);
       if (DEMO_MODE && values.get(SAVED_KEY) === null) {
-        const response = await fetch(demoURL('/demo'));
+        const response = await apiFetch(demoURL('/demo'));
         if (response.ok) {
           const data = await response.json() as { saved_ids: string[] };
           const examples = await Promise.all(data.saved_ids.map((id) => getEvent(id)));
@@ -282,7 +286,6 @@ function CityPulse({ initialTab, auth, onLogout, settings, onApplySettings }: { 
       { id: 'feed' as const, icon: '⌁', label: '发现' },
       { id: 'map' as const, icon: '⌖', label: '地图' },
       { id: 'saved' as const, icon: '♙', label: '我的' },
-      ...(!settings.enabled && auth?.user.role === 'admin' ? [{ id: 'admin' as const, icon: '✓', label: '审核' }] : []),
     ],
     [auth?.user.role, settings.enabled],
   );
@@ -291,14 +294,11 @@ function CityPulse({ initialTab, auth, onLogout, settings, onApplySettings }: { 
   return (
     <View style={styles.safeArea}>
       <StatusBar style="dark" />
-      {!settings.enabled && auth && <View style={[styles.accountBar, { paddingTop: Math.max(12, insets.top) }]}>
-        <Text style={styles.accountText}>{auth.user.email} · {auth.user.role === 'admin' ? '管理员' : '普通用户'}</Text>
-        <Pressable accessibilityRole="button" onPress={() => { void onLogout().catch(() => setError('退出失败，请检查网络后重试。')); }}><Text style={{ color: colors.green }}>退出</Text></Pressable>
-      </View>}
       {!!error && <Pressable onPress={() => setError('')}><Text accessibilityRole="alert" style={{ color: '#A12626', padding: 12 }}>{error}</Text></Pressable>}
-      <View style={[styles.content, tab !== 'map' && { paddingTop: settings.enabled ? insets.top : 0, paddingBottom: 90 + insets.bottom }]}>
-        {tab === 'admin' && !settings.enabled && auth?.user.role === 'admin' && <AdminWorkspace userId={auth.user.id} onChanged={() => { void load(filter, query, when); }} />}
-        {tab === 'settings' && <SettingsScreen settings={settings} onApply={onApplySettings} onBack={() => setTab('saved')} />}
+      <View style={[styles.content, tab !== 'map' && { paddingTop: insets.top, paddingBottom: 90 + insets.bottom }]}>
+        {tab === 'admin' && !settings.enabled && auth?.user.role === 'admin' && <AdminWorkspace userId={auth.user.id} onBack={() => setTab('settings')} onChanged={() => { void load(filter, query, when); }} />}
+        {tab === 'login' && <View style={{flex:1}}><Pressable accessibilityRole="button" accessibilityLabel="返回设置" onPress={() => setTab('settings')} style={{padding:18}}><Text>‹ 设置</Text></Pressable><LoginScreen onLogin={onLogin} /></View>}
+        {tab === 'settings' && <SettingsScreen settings={settings} onApply={onApplySettings} onBack={() => setTab('saved')} user={auth?.user ?? null} onAdmin={() => setTab('admin')} onLogout={onLogout} onLogin={() => setTab('login')} />}
         {tab === 'feed' && (
           <FeedScreen
             events={events}
@@ -345,7 +345,7 @@ function CityPulse({ initialTab, auth, onLogout, settings, onApplySettings }: { 
       </View>
       <View style={[styles.tabBar, { bottom: Math.max(12, insets.bottom + 6) }]}>
         {tabs.map((item) => {
-          const active = tab === item.id || (tab === 'settings' && item.id === 'saved');
+          const active = tab === item.id || ((tab === 'settings' || tab === 'admin') && item.id === 'saved');
           return (
             <Pressable
               accessibilityRole="button"

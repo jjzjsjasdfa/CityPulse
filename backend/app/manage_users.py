@@ -14,7 +14,20 @@ from app.schemas import Credentials
 def main() -> None:
     parser = argparse.ArgumentParser(description="Create a CityPulse administrator")
     parser.add_argument("email")
+    parser.add_argument("--promote", action="store_true", help="Grant admin role to an existing active account; preserve its password")
     args = parser.parse_args()
+    if args.promote:
+        with Session(engine) as session:
+            user = session.exec(select(User).where(User.email == args.email.strip().lower())).first()
+            if user is None:
+                parser.error("Account does not exist; register it first or omit --promote")
+            if not user.is_active:
+                parser.error("Account is inactive; no account was changed")
+            user.role = UserRole.admin
+            session.add(user)
+            session.commit()
+        print("Administrator role granted; password unchanged. Sign in again in the app.")
+        return
     password = getpass("New administrator password (12-128 characters): ")
     if password != getpass("Confirm password: "):
         parser.error("Passwords do not match")

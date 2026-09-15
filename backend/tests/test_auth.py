@@ -96,3 +96,41 @@ def test_validation_does_not_echo_password_and_login_is_throttled(auth_client):
     for _ in range(10):
         response = client.post("/api/v1/auth/login", json=credentials)
     assert response.status_code == 429
+
+
+def test_demo_requires_active_administrator(auth_client):
+    from app.demo import app as demo_app
+    client, session = auth_client
+    demo_app.dependency_overrides[get_session] = lambda: session
+    try:
+        demo = TestClient(demo_app)
+        assert demo.get('/api/v1/demo/dataset').status_code == 401
+        credentials = {'email': 'debug@example.com', 'password': 'long-debug-password'}
+        client.post('/api/v1/auth/register', json=credentials)
+        token = client.post('/api/v1/auth/login', json=credentials).json()['access_token']
+        headers = {'Authorization': f'Bearer {token}'}
+        assert demo.post('/api/v1/demo/publish', headers=headers).status_code == 403
+        user = session.exec(select(User)).one()
+        user.role = UserRole.admin
+        session.add(user)
+        session.commit()
+        assert demo.get('/api/v1/demo/dataset', headers=headers).status_code == 200
+        client.post('/api/v1/auth/logout', headers=headers)
+        assert demo.get('/api/v1/demo/dataset', headers=headers).status_code == 401
+    finally:
+        demo_app.dependency_overrides.clear()
+
+
+def test_promote_existing_account_preserves_password(auth_client, monkeypatch):
+    import sys
+    from app import manage_users
+    _, session = auth_client
+    user = User(email='existing@example.com', password_hash='unchanged-password-hash')
+    session.add(user)
+    session.commit()
+    monkeypatch.setattr(manage_users, 'engine', session.get_bind())
+    monkeypatch.setattr(sys, 'argv', ['manage_users', 'existing@example.com', '--promote'])
+    manage_users.main()
+    session.refresh(user)
+    assert user.role == UserRole.admin
+    assert user.password_hash == 'unchanged-password-hash'

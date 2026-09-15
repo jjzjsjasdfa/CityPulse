@@ -41,7 +41,7 @@ export function DetailSheet({ event, loading, saved, onClose, onToggleSaved, onS
   const openMap = async () => {
     const { latitude, longitude } = event.location;
     try {
-      await Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${latitude},${longitude}`)}`);
+      await Linking.openURL(`https://uri.amap.com/marker?position=${longitude},${latitude}&coordinate=wgs84&name=${encodeURIComponent(event.location.venue_name)}&src=CityPulse&callnative=1`);
     } catch {
       Alert.alert('无法打开地图', '请稍后重试，或将地址复制到地图软件中搜索。');
     }
@@ -112,7 +112,7 @@ export function DetailSheet({ event, loading, saved, onClose, onToggleSaved, onS
             )}
             <Text style={styles.label}>地点</Text>
             <Text style={styles.value}>{event.location.venue_name}</Text>
-            <Pressable accessibilityRole="link" accessibilityLabel={`${event.location.address}，在 Google 地图中打开`} onPress={openMap} style={styles.addressButton}>
+            <Pressable accessibilityRole="link" accessibilityLabel={`${event.location.address}，在高德地图中打开`} onPress={openMap} style={styles.addressButton}>
               <Text style={[styles.subValue, styles.addressLink]}>{event.location.address} ↗</Text>
             </Pressable>
           </View>

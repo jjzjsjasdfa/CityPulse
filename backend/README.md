@@ -22,7 +22,25 @@ python -m uvicorn app.main:app --reload
 Docker startup runs migrations and `app.bootstrap`, then serves the API. Bootstrap
 attempts the default Showstart import and logs failures. `INGESTION_ON_STARTUP=false`
 disables that attempt; manual ingestion remains available. There are no seeded
-accounts or events. The administrator CLI never changes an existing account.
+accounts or events. The administrator create command never changes an existing account unless the explicit `--promote` mode is selected.
+
+To explicitly promote an existing active account (password unchanged):
+
+```powershell
+python -m app.manage_users YOUR_EMAIL --promote
+```
+
+The create command without `--promote` still refuses an existing email. Promotion
+requires trusted server/terminal access; public registration cannot set roles.
+Sign in again after promotion to refresh the application's role display.
+
+Guests can browse public activities and use basic settings. The application only
+shows debugging controls to authenticated administrators. Debug mode is disabled
+on restart, logout and session expiry. `app.demo` now also checks the administrator
+session on every endpoint: run it with the same `DATABASE_URL` as `app.main` and
+send the real login bearer token. The temporary dataset stays in memory; only
+account/session verification uses the database. No development bypass account is
+provided. Map credentials are independent of account/database configuration.
 
 ## Endpoints
 
