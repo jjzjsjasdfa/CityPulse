@@ -23,6 +23,24 @@ let page;
 try {
   browser = await chromium.launch({ executablePath, headless: true });
   page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  await page.addInitScript(() => localStorage.setItem('@citypulse/settings-v1', JSON.stringify({ enabled: false, radiusKm: 7, monitor: false, cycleSeconds: 1 })));
+  const openSettings = async () => {
+    await page.getByRole('button', { name: '我的', exact: true }).click();
+    await page.getByRole('button', { name: '设置', exact: true }).click();
+  };
+  const logout = async () => {
+    await openSettings();
+    await page.getByRole('button', { name: '退出登录', exact: true }).click();
+    await openSettings();
+    await page.getByRole('button', { name: '登录 / 注册' }).click();
+  };
+  const openAdmin = async () => {
+    assert.equal(await page.getByRole('button', { name: '审核', exact: true }).count(), 0);
+    await openSettings();
+    await page.getByRole('button', { name: '管理员工作台 ›', exact: true }).click();
+    await page.getByRole('button', { name: '返回设置', exact: true }).click();
+    await page.getByRole('button', { name: '管理员工作台 ›', exact: true }).click();
+  };
   let formCapture = 0;
   const clickFormAction = async (name) => {
     const control = page.getByRole('button', { name, exact: true });
@@ -33,7 +51,6 @@ try {
     await page.screenshot({ path: `artifacts/form-action-${++formCapture}.png` });
     await control.click();
   };
-  await page.route('https://www.openstreetmap.org/**', (route) => route.fulfill({ contentType: 'text/html', body: '<html><body>Map tile fixture</body></html>' }));
   const errors = [];
   page.on('pageerror', (error) => { errors.push(error.message); console.error('Browser error:', error.message); });
   const baseTime = Math.floor(Date.now() / 60000) * 60000;
@@ -151,18 +168,24 @@ try {
     throw new Error(`Unexpected API request: ${path}`);
   });
   await page.goto(`http://127.0.0.1:${server.address().port}`, { waitUntil: 'networkidle' });
+  await openSettings();
+  await page.getByRole('button', { name: '登录 / 注册' }).click();
   await page.getByRole('button', { name: '没有账号？注册' }).click();
   await page.getByLabel('邮箱', { exact: true }).fill('reader@example.com');
   await page.getByLabel('密码', { exact: true }).fill('browser-test-password');
   await page.getByRole('button', { name: '注册并登录', exact: true }).click();
+  await page.getByRole('button', { name: '发现', exact: true }).click();
   await page.getByText('这个筛选下还没有已审核的活动。').waitFor();
   assert.equal(await page.getByRole('button', { name: '审核', exact: true }).count(), 0);
+  await openSettings();
+  assert.equal(await page.getByRole('button', { name: '管理员工作台 ›', exact: true }).count(), 0);
   assert.equal(privateRequests, 0);
-  await page.getByRole('button', { name: '退出', exact: true }).click();
+  await logout();
   await page.getByLabel('邮箱', { exact: true }).fill('admin@example.com');
   await page.getByLabel('密码', { exact: true }).fill('browser-test-password');
   await page.getByRole('button', { name: '登录', exact: true }).click();
-  await page.getByRole('button', { name: '审核', exact: true }).click();
+  await page.getByRole('button', { name: '发现', exact: true }).click();
+  await openAdmin();
   await page.getByText('Browser test concert 1', { exact: true }).click();
   await page.getByLabel('审核记录 / 拒绝原因', { exact: true }).fill('Verified browser test');
   await page.getByRole('button', { name: '通过并公开', exact: true }).click();
@@ -228,10 +251,11 @@ try {
   await page.getByRole('button', { name: '查看Browser test concert 3' }).waitFor();
   await mkdir('artifacts', { recursive: true });
   await page.screenshot({ path: 'artifacts/admin-review-smoke.png', fullPage: true });
-  await page.getByRole('button', { name: '退出', exact: true }).click();
+  await logout();
   await page.getByLabel('邮箱', { exact: true }).fill('reader@example.com');
   await page.getByLabel('密码', { exact: true }).fill('browser-test-password');
   await page.getByRole('button', { name: '登录', exact: true }).click();
+  await page.getByRole('button', { name: '发现', exact: true }).click();
   await page.getByRole('button', { name: '查看Browser test concert 1' }).waitFor();
   assert.equal(await page.getByText('Browser test concert 2', { exact: true }).count(), 0);
   assert.equal(await page.getByRole('button', { name: '审核', exact: true }).count(), 0);
@@ -247,11 +271,12 @@ try {
   await page.getByRole('button', { name: '提交审核', exact: true }).click();
   await page.getByText('纠错已进入审核队列，感谢你帮助保持信息准确。').waitFor();
   await page.getByRole('button', { name: '关闭活动详情', exact: true }).click();
-  await page.getByRole('button', { name: '退出', exact: true }).click();
+  await logout();
   await page.getByLabel('邮箱', { exact: true }).fill('admin@example.com');
   await page.getByLabel('密码', { exact: true }).fill('browser-test-password');
   await page.getByRole('button', { name: '登录', exact: true }).click();
-  await page.getByRole('button', { name: '审核', exact: true }).click();
+  await page.getByRole('button', { name: '发现', exact: true }).click();
+  await openAdmin();
   await page.getByRole('button', { name: '纠错收件箱', exact: true }).click();
   await page.getByText('The event venue address needs a correction.', { exact: true }).click();
   await page.getByRole('button', { name: '编辑活动并应用纠错', exact: true }).click();

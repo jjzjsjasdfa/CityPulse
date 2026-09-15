@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useEffect, useState } from 'react';
 import { AppState, Platform, StyleSheet, Text, View } from 'react-native';
+import { isAMapEnabled } from '../demo';
 
 export interface PerformanceSample { at: number; fps: number; p95: number; worst: number; slow: number; longTasks: number; needsOptimization: boolean }
 export const performanceHistory: PerformanceSample[] = [];
@@ -36,7 +37,8 @@ export function PerformanceMonitor({ visible }: { visible: boolean }) {
   }, []);
   if (!visible) return null;
   return <View pointerEvents="none" testID="performance-monitor" style={styles.panel}>
-    <Text style={styles.text}>{Platform.OS==='web'?'页面':'JS'} FPS {sample?.fps ?? '…'} · P95 {sample?.p95 ?? '…'} ms</Text>
+    <Text style={styles.text}>主界面 FPS {sample?.fps ?? '…'} · P95 {sample?.p95 ?? '…'} ms</Text>
+    {isAMapEnabled() && <Text style={styles.text}>不含高德地图容器帧率</Text>}
     <Text style={styles.text}>慢帧 {sample?.slow ?? 0}/秒 · 最长 {sample?.worst ?? '…'} ms</Text>
     <Text style={[styles.text,{color:sample?.needsOptimization?'#B33D20':'#287568'}]}>{sample?.needsOptimization?'持续不流畅 · 需要优化':sample?'正在记录 · 未发现持续卡顿':'正在采样…'}</Text>
   </View>;

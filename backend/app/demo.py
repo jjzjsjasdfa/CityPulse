@@ -5,10 +5,11 @@ from datetime import UTC, date, datetime, time, timedelta
 from typing import Literal
 from uuid import UUID
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.demo_data import build_dataset
+from app.core.security import require_admin
 from app.models import EventCategory
 from app.schemas import (
     EventDetailResponse,
@@ -17,7 +18,7 @@ from app.schemas import (
     NearbyEventsResponse,
 )
 
-app = FastAPI(title="CityPulse 虚构数据测试 API", version="0.1.0")
+app = FastAPI(title="CityPulse 虚构数据测试 API", version="0.1.0", dependencies=[Depends(require_admin)])
 app.add_middleware(
     CORSMiddleware, allow_origins=["*"], allow_methods=["GET", "POST"], allow_headers=["*"]
 )

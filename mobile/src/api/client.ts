@@ -16,9 +16,11 @@ export function setAuthHandler(handler: () => void) { onUnauthorized = handler; 
 export function clearSession() { accessToken = null; }
 
 const emulatorHost = Platform.OS === 'android' ? '10.0.2.2' : 'localhost';
+const productionURL = () => process.env.EXPO_PUBLIC_API_URL ?? demoApiURL(undefined, Constants.expoConfig?.hostUri, Platform.OS,
+  Platform.OS === 'web' && typeof window !== 'undefined' ? window.location.hostname : undefined).replace(':18082/', ':8000/');
 export const apiURL = () => DEMO_MODE ? demoApiURL(process.env.EXPO_PUBLIC_DEMO_API_URL, Constants.expoConfig?.hostUri, Platform.OS,
   Platform.OS === 'web' && typeof window !== 'undefined' ? window.location.hostname : undefined) :
-  (process.env.EXPO_PUBLIC_API_URL ?? `http://${emulatorHost}:8000/api/v1`);
+  productionURL();
 export const demoURL = (path: string) => `${apiURL()}${path}${path.includes('?') ? '&' : '?'}${demoQuery()}`;
 
 export class ApiError extends Error {
@@ -30,11 +32,17 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(DEMO_MODE ? demoURL(path) : `${apiURL()}${path}`, {
+export async function apiFetch(url: string, init?: RequestInit): Promise<Response> {
+  const response = await fetch(url, {
     ...init,
-    headers: { 'Content-Type': 'application/json', ...(!DEMO_MODE && accessToken ? { Authorization: `Bearer ${accessToken}` } : {}), ...init?.headers },
+    headers: { 'Content-Type': 'application/json', ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}), ...init?.headers },
   });
+  if ((response.status === 401 || response.status === 403) && accessToken) { clearSession(); onUnauthorized?.(); }
+  return response;
+}
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const accountRoute = path.startsWith('/auth/') || path.startsWith('/admin/');
+  const response = await apiFetch(accountRoute ? `${productionURL()}${path}` : DEMO_MODE ? demoURL(path) : `${apiURL()}${path}`, init);
   if (!response.ok) {
     const payload = (await response.json().catch(() => ({}))) as ApiErrorEnvelope;
     if (response.status === 401 && !DEMO_MODE && accessToken) {

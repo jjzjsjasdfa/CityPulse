@@ -1,9 +1,10 @@
-export interface DebugSettings { enabled: boolean; time: string | null; radiusKm: number; monitor: boolean; cycleSeconds: number }
-export const DEFAULT_SETTINGS: DebugSettings = { enabled: process.env.EXPO_PUBLIC_DEMO_MODE === '1', time: null, radiusKm: 7, monitor: true, cycleSeconds: 1 };
+export interface DebugSettings { enabled: boolean; time: string | null; radiusKm: number; monitor: boolean; cycleSeconds: number; amap?: boolean }
+export const DEFAULT_SETTINGS: DebugSettings = { enabled: false, time: null, radiusKm: 7, monitor: true, cycleSeconds: 1, amap: false };
 export let DEMO_MODE = DEFAULT_SETTINGS.enabled;
 let settings = DEFAULT_SETTINGS;
 let appliedAt = Date.now();
 export function configureDebug(next: DebugSettings) { settings = next; DEMO_MODE = next.enabled; appliedAt = Date.now(); }
+export function isAMapEnabled() { return settings.amap === true; }
 export function appNow() { return settings.enabled && settings.time ? Date.parse(settings.time) + Date.now() - appliedAt : Date.now(); }
 export function nearbyRadius() { return settings.enabled ? settings.radiusKm : 7; }
 export function markerCycleMs() { return (settings.enabled ? settings.cycleSeconds : 1) * 1000; }

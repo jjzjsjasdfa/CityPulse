@@ -1,0 +1,40 @@
+import assert from 'node:assert/strict';
+import {chromium} from 'playwright-core';
+const browser=await chromium.launch({executablePath:process.env.CHROME_PATH??'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',headless:true});
+try {
+ const page=await browser.newPage({viewport:{width:390,height:844}});
+ let role='regular', shortSession=false;const requests=[],errors=[];
+ page.on('pageerror',e=>{errors.push(e.message);console.error(e.stack);});
+ await page.addInitScript(()=>localStorage.setItem('@citypulse/settings-v1',JSON.stringify({enabled:true,time:null,monitor:true,radiusKm:7,cycleSeconds:1})));
+ await page.route('**/api/v1/**',async route=>{
+  const req=route.request(),url=new URL(req.url()),path=url.pathname;requests.push({path,port:url.port,token:req.headers().authorization});
+  const json=body=>route.fulfill({contentType:'application/json',body:JSON.stringify(body)});
+  if(path.endsWith('/auth/login'))return json({access_token:'fixture-token',expires_at:new Date(Date.now()+(shortSession?2200:600000)).toISOString(),user:{id:role,email:role+'@example.com',role,is_active:true}});
+  if(path.endsWith('/auth/logout'))return route.fulfill({status:204});
+  if(path.endsWith('/demo'))return json({saved_ids:[],anchor:new Date().toISOString()});
+  if(path.includes('/admin/'))return json([]);
+  if(path.endsWith('/events'))return json({data:[],meta:{total:0,page:1,page_size:50,has_next:false}});
+  return json({data:[],meta:{count:0,has_next:false,next_offset:null},checked_at:new Date().toISOString()});
+ });
+ await page.goto('http://localhost:18081');
+ const settings=async()=>{await page.getByRole('button',{name:'我的',exact:true}).click();await page.getByRole('button',{name:'设置',exact:true}).click();};
+ const login=async()=>{await settings();await page.getByRole('button',{name:'登录 / 注册'}).click();await page.getByLabel('邮箱',{exact:true}).fill(role+'@example.com');await page.getByLabel('密码',{exact:true}).fill('long-fixture-password');await page.getByRole('button',{name:'登录',exact:true}).click();};
+ const noDebug=async()=>{assert.equal(await page.getByRole('switch',{name:'开启调试功能'}).count(),0);assert.equal(await page.getByRole('button',{name:'管理员工作台 ›'}).count(),0);};
+ await page.getByRole('button',{name:'地图',exact:true}).click();await page.locator('.leaflet-container').waitFor();
+ await settings();await noDebug();assert.ok(requests.every(r=>r.port!=='18082'),'stored debug flag cannot enable guest demo');
+ await page.getByRole('button',{name:'登录 / 注册'}).click();await page.getByRole('button',{name:'返回设置',exact:true}).click();await noDebug();
+ await login();await page.getByRole('button',{name:'退出登录'}).waitFor();await noDebug();
+ await page.getByRole('button',{name:'退出登录'}).click();
+ role='admin';await login();
+ const debug=page.getByRole('switch',{name:'开启调试功能'});await debug.waitFor();assert.equal(await debug.isChecked(),false);
+ await page.getByRole('button',{name:'管理员工作台 ›'}).click();await page.getByRole('button',{name:'返回设置',exact:true}).click();
+ await debug.click();await page.getByRole('button',{name:'应用设置并返回地图'}).click();await page.getByTestId('my-location').waitFor();
+ await settings();await page.getByRole('button',{name:'退出登录'}).click();await settings();await noDebug();
+ assert.ok(requests.some(r=>r.port==='18082'&&r.token==='Bearer fixture-token'));
+ assert.ok(requests.filter(r=>r.path.endsWith('/auth/logout')).every(r=>r.port==='8000'),'logout uses real authentication in demo mode');
+ shortSession=true;await login();await page.getByRole('switch',{name:'开启调试功能'}).waitFor();
+ await page.waitForTimeout(2500);await settings();await noDebug();
+ assert.deepEqual(errors,[]);
+ await page.screenshot({path:'artifacts/guest-settings.png'});
+ console.log('PASS: guest browsing/back navigation, stored-debug bypass blocked, regular/admin roles, authenticated demo, logout and expiry reset. Browser fixtures only.');
+} finally {await browser.close();}
