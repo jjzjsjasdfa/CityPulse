@@ -41,6 +41,8 @@ class IngestionItem:
     address: str | None = None
     city: str | None = None
     district: str | None = None
+    latitude: float | None = None
+    longitude: float | None = None
     facts: dict[str, Any] = field(default_factory=dict)
 
     @property
@@ -75,6 +77,8 @@ class IngestionItem:
             "address": self.address,
             "city": self.city,
             "district": self.district,
+            "latitude": self.latitude,
+            "longitude": self.longitude,
             "facts": self.facts,
         }
         # Fail early if an adapter adds a value PostgreSQL JSON cannot store.

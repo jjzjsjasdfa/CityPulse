@@ -3,9 +3,12 @@ import { chromium } from 'playwright-core';
 const browser = await chromium.launch({executablePath:process.env.CHROME_PATH ?? 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',headless:true});
 const context = await browser.newContext({viewport:{width:390,height:844}});
 const page = await context.newPage();
-const errors = [], requests = [];
+const errors = [], requests = [], demoCredentials = [];
 page.on('pageerror', (error) => errors.push(error.message));
-page.on('request', (request) => {if(request.url().includes('/api/v1/')) requests.push(new URL(request.url()));});
+page.on('request', (request) => {
+  if(request.url().includes('/api/v1/')) requests.push(new URL(request.url()));
+  if(new URL(request.url()).port === '18082' && request.headers().authorization) demoCredentials.push(request.url());
+});
 await page.addInitScript(() => {
   window.introFrames = [];
   const recordIntro = () => {
@@ -20,7 +23,14 @@ await page.addInitScript(() => {
     clearWatch() {},
   }});
 });
-await page.route('http://localhost:8000/**', (route) => route.abort());
+await page.route('http://localhost:8000/**', (route) => {
+  if (new URL(route.request().url()).pathname.endsWith('/auth/login')) return route.fulfill({ json: {
+    access_token: 'debug-isolation-fixture-token', token_type: 'bearer',
+    expires_at: new Date(Date.now() + 3600000).toISOString(),
+    user: { id: 'debug-admin', email: 'admin@example.com', role: 'admin' },
+  } });
+  return route.abort();
+});
 const dataset = await (await fetch('http://localhost:18082/api/v1/demo/dataset')).json();
 const target = dataset.events[80];
 const wave = () => page.locator('[data-testid^="startup-wave-"]');
@@ -73,6 +83,12 @@ try {
   await page.getByRole('switch',{name:'开启调试功能'}).click();
   const offset = requests.length;
   await page.getByRole('button',{name:'应用设置并返回地图'}).click();
+  await page.getByRole('button',{name:'登录',exact:true}).waitFor();
+  assert.equal(await page.evaluate(()=>window.gpsRequests),0,'real mode requires login before starting location subscriptions');
+  await page.getByLabel('邮箱',{exact:true}).fill('admin@example.com');
+  await page.getByLabel('密码',{exact:true}).fill('debug-fixture-password');
+  await page.getByRole('button',{name:'登录',exact:true}).click();
+  await page.getByRole('button',{name:'审核',exact:true}).waitFor();
   await page.getByTestId('my-location').waitFor();await page.waitForTimeout(1500);
   assert.ok(await page.evaluate(()=>window.gpsRequests)>0,'real mode must request device location');
   assert.ok(requests.slice(offset).some(url=>url.port==='8000'));
@@ -84,6 +100,8 @@ try {
   await page.getByRole('switch',{name:'开启调试功能'}).click();
   await page.getByRole('button',{name:'应用并重播新活动'}).click();
   await wave().first().waitFor();
+  assert.equal(await page.getByRole('button',{name:'审核',exact:true}).count(),0,'production admin actions are hidden in demo mode');
+  assert.deepEqual(demoCredentials,[],'production bearer tokens never reach the demo API');
   await page.waitForTimeout(1700);
   await page.reload({waitUntil:'networkidle'});
   await page.getByRole('button',{name:'虚构数据测试设置'}).waitFor();

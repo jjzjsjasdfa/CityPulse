@@ -13,7 +13,7 @@ try {
   assert.deepEqual(await page.getByRole('checkbox').evaluateAll(nodes=>nodes.map(node=>node.getAttribute('aria-checked'))),before,'drag does not toggle category');
   await page.getByRole('checkbox',{name:'筛选季节活动'}).click();
   assert.equal(await page.getByRole('checkbox',{name:'筛选季节活动'}).getAttribute('aria-checked'),'false');
-  for(const name of ['发现','探索','我的']) {
+  for(const name of ['发现','地图','我的']) {
     const button=page.getByRole('button',{name,exact:true});await button.waitFor();
     const icon=await button.locator('svg').boundingBox();assert.equal(icon.width,24);assert.equal(icon.height,24);
   }
@@ -22,5 +22,5 @@ try {
   assert.equal(await page.getByText('事实优先，不让热度替你决定',{exact:true}).count(),0);
   assert.equal(await page.getByText('长沙⌄',{exact:true}).count(),0);
   await page.screenshot({path:'artifacts/ui-polish-feed.png'});
-  console.log('PASS: mouse category drag, no accidental toggles, equal nav icons, Explore label, clean feed header');
+  console.log('PASS: mouse category drag, no accidental toggles, equal nav icons, map navigation, clean feed header');
 } finally {await browser.close();}

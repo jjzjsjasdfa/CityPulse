@@ -24,7 +24,9 @@ services:
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://citypulse:citypulse-dev@db:5432/citypulse}
       BACKEND_CORS_ORIGINS: ${BACKEND_CORS_ORIGINS:-http://localhost:8081,http://localhost:19006}
-      INGESTION_USER_AGENT: ${INGESTION_USER_AGENT:-CityPulse/0.1 (+https://citypulse.invalid/contact-required)}
+      INGESTION_USER_AGENT: ${INGESTION_USER_AGENT:-CityPulse/0.1}
+      INGESTION_ON_STARTUP: ${INGESTION_ON_STARTUP:-true}
+      AMAP_API_KEY: ${AMAP_API_KEY:-}
     ports:
       - "8000:8000"
     depends_on:

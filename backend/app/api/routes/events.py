@@ -1,10 +1,11 @@
 from datetime import UTC, date, datetime, time, timedelta
 from typing import Annotated, Literal
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from geoalchemy2 import Geometry
-from sqlalchemy import cast, func
+from sqlalchemy import cast, func, or_
 from sqlmodel import Session, select
 
 from app.core.database import get_session
@@ -69,11 +70,11 @@ def _summary(event: Event, now: datetime | None = None) -> EventSummary:
 
 
 def _date_start(value: date) -> datetime:
-    return datetime.combine(value, time.min, tzinfo=UTC)
+    return datetime.combine(value, time.min, tzinfo=ZoneInfo("Asia/Shanghai"))
 
 
 def _date_end(value: date) -> datetime:
-    return datetime.combine(value, time.max, tzinfo=UTC)
+    return datetime.combine(value, time.max, tzinfo=ZoneInfo("Asia/Shanghai"))
 
 
 @router.get("", response_model=EventPage)
@@ -87,9 +88,34 @@ def list_events(
     category: EventCategory | None = None,
     attribute: str | None = Query(default=None, max_length=60),
     sort: Literal["newest", "soonest", "ending_soon"] = "soonest",
+    time_scope: Literal["upcoming", "past"] = "upcoming",
+    q: str = Query("", max_length=200),
+    when: Literal["any", "today", "weekend"] = "any",
 ) -> EventPage:
     now = datetime.now(UTC)
-    conditions = [Event.is_published.is_(True), Event.city == city, Event.ends_at >= now]
+    conditions = [
+        Event.is_published.is_(True),
+        Event.is_demo.is_(False),
+        Event.city == city,
+        Event.ends_at < now if time_scope == "past" else Event.ends_at >= now,
+    ]
+    if date_from and date_to and date_from > date_to:
+        raise HTTPException(422, "Start date must not be after end date")
+    if when != "any":
+        today = now.astimezone(ZoneInfo("Asia/Shanghai")).date()
+        first = today
+        if when == "weekend":
+            first = today + timedelta(days=5 - today.weekday())
+        last = first + timedelta(days=1) if when == "weekend" else first
+        conditions.extend([Event.ends_at >= _date_start(first), Event.starts_at <= _date_end(last)])
+    if q.strip():
+        conditions.append(
+            or_(
+                Event.name.icontains(q.strip(), autoescape=True),
+                Event.venue_name.icontains(q.strip(), autoescape=True),
+                Event.summary.icontains(q.strip(), autoescape=True),
+            )
+        )
     if date_from:
         conditions.append(Event.ends_at >= _date_start(date_from))
     if date_to:
@@ -102,11 +128,17 @@ def list_events(
         conditions.append(Event.ends_at <= now + timedelta(days=7))
 
     total = session.exec(select(func.count()).select_from(Event).where(*conditions)).one()
-    order = Event.published_at.desc() if sort == "newest" else Event.starts_at.asc()
+    order = (
+        Event.published_at.desc()
+        if sort == "newest"
+        else Event.ends_at.desc()
+        if time_scope == "past"
+        else Event.starts_at.asc()
+    )
     events = session.exec(
         select(Event)
         .where(*conditions)
-        .order_by(order)
+        .order_by(order, Event.id)
         .offset((page - 1) * page_size)
         .limit(page_size)
     ).all()
@@ -146,6 +178,7 @@ def map_events(
     geometry = cast(Event.location, Geometry(geometry_type="POINT", srid=4326))
     conditions = [
         Event.is_published.is_(True),
+        Event.is_demo.is_(False),
         Event.ends_at > now,
         func.ST_Intersects(geometry, envelope),
     ]
@@ -214,6 +247,7 @@ def nearby_updates(
         select(Event)
         .where(
             Event.is_published.is_(True),
+            Event.is_demo.is_(False),
             Event.ends_at > now,
             Event.published_at >= start,
             Event.published_at <= checked_at,
@@ -242,7 +276,7 @@ def nearby_updates(
 @router.get("/{event_id}", response_model=EventDetailResponse)
 def get_event(event_id: UUID, session: SessionDep) -> EventDetailResponse:
     event = session.get(Event, event_id)
-    if event is None or not event.is_published:
+    if event is None or not event.is_published or event.is_demo:
         raise HTTPException(status_code=404, detail="Event not found")
 
     evidence_rows = session.exec(

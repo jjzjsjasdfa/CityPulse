@@ -31,6 +31,7 @@ export function DetailSheet({ event, loading, saved, onClose, onToggleSaved, onS
   const [showCorrection, setShowCorrection] = useState(false);
   const [message, setMessage] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [correctionNotice, setCorrectionNotice] = useState('');
   const [shareError, setShareError] = useState(false);
 
   if (!event) return null;
@@ -48,7 +49,7 @@ export function DetailSheet({ event, loading, saved, onClose, onToggleSaved, onS
 
   const shareEvent = async () => {
     setShareError(false);
-    const text = `${event.name}${event.is_demo ? '（演示活动）' : ''}\n${formatDate(event.starts_at)}\n${event.location.venue_name}\n在城迹 CityPulse 打开活动：\n${shareUrl}`;
+    const text = `${event.name}\n${formatDate(event.starts_at)}\n${event.location.venue_name}\n在城迹 CityPulse 打开活动：\n${shareUrl}`;
     try {
       if (Platform.OS === 'web') {
         if (navigator.share) await navigator.share({ title: event.name, text });
@@ -62,8 +63,9 @@ export function DetailSheet({ event, loading, saved, onClose, onToggleSaved, onS
   };
 
   const submit = async () => {
+    setCorrectionNotice('');
     if (message.trim().length < 10) {
-      Alert.alert('请再具体一点', '至少填写 10 个字，帮助审核人员快速定位问题。');
+      setCorrectionNotice('至少填写 10 个字，帮助审核人员快速定位问题。');
       return;
     }
     setSubmitting(true);
@@ -71,9 +73,9 @@ export function DetailSheet({ event, loading, saved, onClose, onToggleSaved, onS
       await onSubmitCorrection(message.trim());
       setMessage('');
       setShowCorrection(false);
-      Alert.alert('已收到', '纠错已进入审核队列，感谢你帮助保持信息准确。');
+      setCorrectionNotice('纠错已进入审核队列，感谢你帮助保持信息准确。');
     } catch {
-      Alert.alert('暂未提交', '服务当前不可用，请稍后再试。');
+      setCorrectionNotice('暂未提交，服务当前不可用，请稍后再试。');
     } finally {
       setSubmitting(false);
     }
@@ -99,14 +101,9 @@ export function DetailSheet({ event, loading, saved, onClose, onToggleSaved, onS
             <Text style={styles.heroCity}>{event.location.city} · {event.location.district}</Text>
           </View>
           {loading && <ActivityIndicator color={colors.orange} style={styles.loading} />}
-          {event.is_demo && (
-            <View style={styles.demoNotice}>
-              <Text style={styles.demoNoticeText}>演示数据，不代表真实举办信息</Text>
-            </View>
-          )}
           <View style={styles.primaryInfo}>
             <Text style={styles.label}>时间</Text>
-            <Text style={styles.value}>{formatDate(event.starts_at)}</Text>
+            <Text style={styles.value}>{formatDate(event.starts_at)} — {formatDate(event.ends_at)}</Text>
             {event.price && (
               <>
                 <Text style={styles.label}>价格</Text>
@@ -122,7 +119,7 @@ export function DetailSheet({ event, loading, saved, onClose, onToggleSaved, onS
           <View style={styles.statusCard}>
             <View style={styles.statusTop}>
               <Text style={styles.status}>{statusLabels[event.status]}</Text>
-              <Text style={styles.confidence}>{Math.round(event.confidence * 100)}% 可信度</Text>
+              <Text style={styles.confidence}>管理员已审核</Text>
             </View>
             <Text style={styles.verified}>最近核验：{formatDate(event.last_verified_at)}</Text>
           </View>
@@ -144,7 +141,7 @@ export function DetailSheet({ event, loading, saved, onClose, onToggleSaved, onS
               <View style={{ flex: 1 }}>
                 <Text style={styles.sourceName}>{source.name}</Text>
                 <Text style={styles.sourceMeta}>
-                  {source.is_official ? '官方来源' : '可信补充'} · {formatDate(source.checked_at)}
+                  {source.is_official ? '官方来源' : '第三方来源'} · {formatDate(source.checked_at)}
                 </Text>
               </View>
               <Text style={styles.chevron}>›</Text>
@@ -168,6 +165,7 @@ export function DetailSheet({ event, loading, saved, onClose, onToggleSaved, onS
             <View style={styles.correctionBox}>
               <Text style={styles.correctionTitle}>哪里需要纠正？</Text>
               <TextInput
+                accessibilityLabel="纠错说明"
                 multiline
                 onChangeText={setMessage}
                 placeholder="例如：活动已延期，官方页面显示新日期为……"
@@ -176,19 +174,20 @@ export function DetailSheet({ event, loading, saved, onClose, onToggleSaved, onS
                 value={message}
               />
               <View style={styles.correctionActions}>
-                <Pressable onPress={() => setShowCorrection(false)} style={styles.secondaryButton}>
+                <Pressable accessibilityRole="button" onPress={() => setShowCorrection(false)} style={styles.secondaryButton}>
                   <Text style={styles.secondaryButtonText}>取消</Text>
                 </Pressable>
-                <Pressable disabled={submitting} onPress={submit} style={styles.primaryButton}>
+                <Pressable accessibilityRole="button" disabled={submitting} onPress={submit} style={styles.primaryButton}>
                   <Text style={styles.primaryButtonText}>{submitting ? '提交中…' : '提交审核'}</Text>
                 </Pressable>
               </View>
             </View>
           ) : (
-            <Pressable onPress={() => setShowCorrection(true)} style={styles.correctionLink}>
+            <Pressable accessibilityRole="button" onPress={() => { setShowCorrection(true); setCorrectionNotice(''); }} style={styles.correctionLink}>
               <Text style={styles.correctionLinkText}>发现信息有误？提交纠错</Text>
             </Pressable>
           )}
+          {!!correctionNotice && <Text accessibilityRole="alert" style={{ marginHorizontal: 20, marginTop: 12, color: colors.green }}>{correctionNotice}</Text>}
           <View style={styles.actions}>
             <Pressable
               accessibilityRole="button"
@@ -199,7 +198,7 @@ export function DetailSheet({ event, loading, saved, onClose, onToggleSaved, onS
               <Text style={styles.shareText}>分享活动</Text>
             </Pressable>
             <Pressable disabled={!event.official_url} onPress={() => Linking.openURL(event.official_url)} style={styles.officialButton}>
-              <Text style={styles.officialText}>{event.official_url ? '前往官方页面 ↗' : '测试活动 · 无官方页面'}</Text>
+              <Text style={styles.officialText}>{event.official_url ? '前往核验页面 ↗' : '测试活动 · 无官方页面'}</Text>
             </Pressable>
           </View>
           {shareError && (
@@ -241,8 +240,6 @@ const styles = StyleSheet.create({
   heroTitle: { color: colors.white, fontSize: 35, lineHeight: 42, fontWeight: '900', marginTop: 10, maxWidth: '88%' },
   heroCity: { color: 'rgba(255,255,255,0.86)', fontWeight: '700', marginTop: 12 },
   loading: { marginTop: 10 },
-  demoNotice: { margin: 20, marginBottom: 0, backgroundColor: '#FFF0C8', borderRadius: 12, padding: 11 },
-  demoNoticeText: { color: '#705B20', textAlign: 'center', fontSize: 12, fontWeight: '800' },
   primaryInfo: { padding: 20, paddingBottom: 12 },
   label: { color: colors.orange, fontSize: 11, fontWeight: '900', letterSpacing: 1.4, marginTop: 10 },
   value: { color: colors.ink, fontSize: 20, lineHeight: 27, fontWeight: '900', marginTop: 5 },

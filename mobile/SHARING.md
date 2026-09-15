@@ -4,9 +4,9 @@ The address in the detail sheet opens a Google Maps HTTPS URL using the event's
 coordinates. Google Maps handles opening its installed app, with a browser fallback.
 
 Share activity sends the activity title, time, venue, and a link such as
-`citypulse://event/demo-market`. The existing `scheme` in app.json registers this
+`citypulse://event/{event UUID}`. The existing `scheme` in app.json registers this
 scheme in native builds. App.tsx handles both cold-start and already-running links.
-Local demo IDs work without the API; other IDs require the configured API.
+All event links require the configured API and an approved, published event. Sign in to view the app.
 
 Verify on an installed development or release build, not Expo Go:
 

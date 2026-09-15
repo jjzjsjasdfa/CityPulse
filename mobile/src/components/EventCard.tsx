@@ -1,7 +1,6 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import type { EventSummary } from '../api/types';
-import { DEMO_LIKE_COUNTS } from '../data/demoPopularity';
 import { categoryColors, categoryLabels, colors, formatDate, statusLabels } from '../theme';
 
 interface Props {
@@ -13,8 +12,6 @@ interface Props {
 
 export function EventCard({ event, saved, onPress, onToggleSaved }: Props) {
   const accent = categoryColors[event.category];
-  const demoLikes = event.is_demo ? DEMO_LIKE_COUNTS[event.slug] : undefined;
-  const likeCount = demoLikes === undefined ? undefined : demoLikes + Number(saved);
 
   return (
     <View style={styles.card}>
@@ -36,7 +33,6 @@ export function EventCard({ event, saved, onPress, onToggleSaved }: Props) {
           <View style={styles.badgeRow}>
             {event.is_new && <Text style={styles.newBadge}>刚上新</Text>}
             {event.is_ending_soon && <Text style={styles.endingBadge}>快结束</Text>}
-            {event.is_demo && <Text style={styles.demoBadge}>演示</Text>}
           </View>
           <Text style={styles.date}>{formatDate(event.starts_at)}</Text>
           {event.price && <Text style={styles.price}>{event.price}</Text>}
@@ -53,20 +49,14 @@ export function EventCard({ event, saved, onPress, onToggleSaved }: Props) {
           <View style={styles.verifiedRow}>
             <Text style={styles.verifiedDot}>●</Text>
             <Text style={styles.verifiedText}>
-              {statusLabels[event.status]} · {Math.round(event.confidence * 100)}% 可信度
+              {statusLabels[event.status]} · 已审核
             </Text>
           </View>
-          <Text style={styles.popularity} accessibilityLiveRegion="polite">
-            {likeCount === undefined
-              ? '热度 · 暂无人数统计'
-              : `热度 · ${likeCount} 人喜爱（演示）`}
-          </Text>
         </View>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={saved ? '取消收藏' : '收藏活动'}
           accessibilityState={{ selected: saved }}
-          accessibilityHint={likeCount === undefined ? undefined : '同时更新演示喜爱人数'}
           hitSlop={10}
           onPress={onToggleSaved}
           style={styles.saveButton}
@@ -125,16 +115,6 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     fontSize: 11,
   },
-  demoBadge: {
-    alignSelf: 'flex-start',
-    color: colors.inkMuted,
-    backgroundColor: '#E9E5DB',
-    borderRadius: 10,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    fontWeight: '700',
-    fontSize: 11,
-  },
   date: { color: colors.ink, fontWeight: '900', fontSize: 18, marginTop: 8 },
   price: { color: colors.orange, fontWeight: '900', fontSize: 15, marginTop: 6 },
   summary: { color: colors.inkMuted, fontSize: 14, lineHeight: 21, marginTop: 8 },
@@ -150,7 +130,6 @@ const styles = StyleSheet.create({
   saveIcon: { color: colors.ink, fontSize: 28 },
   saveIconActive: { color: colors.orange },
   footerInfo: { flex: 1, gap: 6, paddingRight: 8 },
-  popularity: { color: colors.orange, fontSize: 12, fontWeight: '700' },
   verifiedRow: { flexDirection: 'row', alignItems: 'center' },
   verifiedDot: { color: colors.green, fontSize: 9, marginRight: 6 },
   verifiedText: { color: colors.green, fontSize: 12, fontWeight: '700', flexShrink: 1 },

@@ -1,135 +1,131 @@
-# 城迹 CityPulse
+﻿# CityPulse
 
-一个“可信、结构化、可定位”的单城活动发现 MVP。项目采用契约先行：FastAPI
-输出 OpenAPI，React Native 客户端只使用由该契约生成的类型。
+CityPulse is a Changsha event discovery app with a FastAPI/PostGIS backend and an
+Expo React Native frontend. Showstart listings enter an administrator review queue.
+Only approved, published, non-demo events appear in the public feed and map.
 
-New to the backend? Read the line-by-line architecture guide:
-[doc/BACKEND_STRUCTURE.md](doc/BACKEND_STRUCTURE.md).
+## Start
 
-本仓库参考了
-[Full Stack FastAPI Template](https://github.com/fastapi/full-stack-fastapi-template)
-的 FastAPI、SQLModel、PostgreSQL、Alembic、Docker Compose 和自动客户端思路；
-前端替换为 Expo React Native，并加入 PostGIS 视口查询。
+Use Docker Desktop, Node.js 22.13+ and npm.
 
-## 已实现
+1. Copy `.env.example` to `.env`. `INGESTION_USER_AGENT` defaults to `CityPulse/0.1`;
+   optionally append your real contact email or project URL in parentheses.
+2. Run `docker compose up --build`. Startup migrates the database and imports
+   Showstart candidates. Source/network failures are logged and do not stop the API.
+3. Create your administrator, using your own email:
+   `docker compose exec api python -m app.manage_users YOUR_EMAIL`.
+   The command prompts privately for a password; there are no default accounts.
+4. In `mobile`, run `npm install` and `npm start` (or `npm run web`).
+5. Sign in as the administrator and open **审核**. Inspect each source and supply
+   verified missing details, including end time, address, WGS84 coordinates and
+   organizer. Add a review note, then choose **通过并公开** or **拒绝**.
+6. Regular users register from the login screen. Accepted upcoming events appear
+   in their feed; they never receive the review page. Approved events whose end
+   time has passed appear under **往期活动** on the discovery page. The default
+   feed and map show only ongoing or upcoming events.
 
-- 信息流：分页、类别、刚上新、临期筛选与排序
-- 地图：按当前视口调用 PostGIS bbox 查询，GiST 空间索引
-- 地图分级：远景仅收藏 → 省域彩色圆点 → 城市彩色类别 → 街区活动名称；圆点按时间分六档
-- 定位与新活动：启动以自己为中心，默认 500 米比例尺；附近 15 公里新活动通过八方向渐变波浪提示
-- 连续缩放：触屏双指缩放自动切换圆点、类别与名称，带交叉淡入淡出；网页接入真实底图
-- 临时测试：[200 条虚构活动与长沙定位](docs/DEMO_DATA.md)，接口与正式 PostGIS 服务保持一致
-- 详情：时间地点、状态、来源证据、最近核验时间、可信度、状态历史
-- 收藏：本机持久化，不收集账号或位置
-- 分享与纠错：系统分享；纠错进入后端审核队列
-- 数据模型：`Event`、`Source`、`EventSourceLink`、`StatusHistory`、`Correction`
-- 统一错误结构、CORS、健康检查、Alembic 初始迁移和幂等种子数据
-- 离线演示模式：API 不可用时仍可查看明确标识的虚构数据
-- 合规默认值：无第三方海报、无后台定位、广告与可信度字段分离
+The API is at `http://localhost:8000`, documentation at `/docs`, and health at
+`/health`. For physical devices, set `EXPO_PUBLIC_API_URL` in `mobile/.env` to your
+computer's LAN address followed by `:8000/api/v1`.
 
-## 目录
+## Authentication and review
 
-```text
-project/
-├─ backend/        FastAPI + SQLModel + Alembic
-├─ mobile/         Expo + React Native + TypeScript
-├─ compose.yml     PostgreSQL/PostGIS + API
-└─ .env.example
-```
+- Email/password authentication uses scrypt password hashing and random, revocable
+  bearer sessions. Only token hashes are stored in the database. Sessions expire
+  after 12 hours; logout revokes the current session immediately.
+- Session tokens stay in app memory. Restarting/reloading the app requires login.
+  Bookmarks persist on the device separately for each account.
+- Registration always creates `regular` users. Administrators are provisioned with
+  the CLI. Every review API request checks the current database role and activity.
+- Approved candidates link to one public event, source evidence and status history.
+  Concurrent or stale decisions return 409. Re-importing unchanged data preserves
+  decisions. Changed data withdraws the previous event and returns to review;
+  approval updates that same event, while rejection leaves it unpublished.
+- Public event endpoints remain readable without login, including shared links.
+  The app's account and review navigation requires login.
 
-原有的 `awesome-project/` 是创建本项目之前已存在的未跟踪目录，本次没有修改。
+## Discovery and administration
 
-## 5 分钟启动
+- Discovery searches activity names, venues and summaries. **今天** and **本周末**
+  use Beijing time; weekend means Saturday/Sunday of the current week. **加载更多**
+  fetches the next 50 matching events. Changing search or filters resets pagination.
+- In **审核 → 候选审核**, **保存草稿 / 恢复草稿** persist a draft on the current
+  device for the current administrator. Drafts are saved explicitly, not automatically.
+  An outdated draft is shown for reference rather than silently overwriting new data.
+  Date/time fields use Beijing time. Source fields are labelled as collected,
+  missing or manually edited; map previews help check WGS84 coordinates.
+- Candidates linked to an existing event show differences between the latest
+  source fields and the last public event record.
+- **审核 → 活动管理** lists both published and unpublished events. Edit details,
+  change category/status, reschedule dates, or select **下架**, then save with a
+  review note. A cancelled event can remain public to communicate cancellation.
+  All changes keep before/after values and the administrator's identity.
+- **审核 → 纠错收件箱** supports pending, reviewing, accepted and rejected reports.
+  **编辑活动并应用纠错** opens the linked event; **保存活动并接受纠错** commits the
+  event edit and correction decision together. Reports that need no event edit
+  can be resolved with a written explanation. Private report details stay in admin APIs.
+- Stale event edits and correction decisions return 409. An event withdrawn by a
+  source change must pass candidate review again before republication.
 
-需要 Docker Desktop、Node.js 20+ 和手机上的 Expo Go。
+## Real event data
 
-1. 在仓库根目录复制环境配置并启动 API：
-
-   ```powershell
-   Copy-Item .env.example .env
-   docker compose up --build
-   ```
-
-2. 确认接口可用：
-
-   - API 文档：http://localhost:8000/docs
-   - 健康检查：http://localhost:8000/health
-
-3. 新开终端启动移动端：
-
-   ```powershell
-   Set-Location mobile
-   npm install
-   npm start
-   ```
-
-Android 模拟器默认访问 `10.0.2.2:8000`。真机需要让手机和电脑位于同一局域网，
-并把 `mobile/.env` 中的地址换成电脑局域网 IP：
-
-```dotenv
-EXPO_PUBLIC_API_URL=http://192.168.x.x:8000/api/v1
-```
-
-## 契约工作流
-
-修改后端响应模型后，在 `backend/` 执行：
+Showstart is the default ingestion source:
 
 ```powershell
-python -m scripts.export_openapi
+docker compose exec api python -m app.ingestion --dry-run --limit 20
+docker compose exec api python -m app.ingestion --limit 100
 ```
 
-再在 `mobile/` 执行：
+Production uses real imported events without a synthetic fallback or fabricated popularity counts. The web map uses OpenStreetMap;
+native maps use the device map provider. Missing source facts must be verified by
+an administrator; the importer reads Showstart detail addresses, coordinates and
+time ranges without guessing event duration or organizer. Administrators can use
+**补充详情和地点** on existing candidates. An optional server-side `AMAP_API_KEY`
+enables city + venue-name lookup when the source location is incomplete.
+Existing demo database rows are preserved but unpublished and excluded by all
+public event endpoints. Synthetic fixtures are confined to tests and the explicitly enabled demo service.
+
+## Maps and optional debug mode
+
+The map supports continuous zoom, category controls, collision-aware markers,
+location guidance, and nearby publication alerts. Viewport queries paginate and
+support areas outside Changsha. Saved event coordinates persist per account.
+See [map behavior](docs/MAP_DISPLAY.md) and [location guidance](docs/LOCATION_GUIDANCE.md).
+
+**我的 → 设置** provides an explicit debug switch with a simulated clock, location,
+alert replay and performance monitor. Debug mode uses a separate in-memory API
+and storage namespace, never production accounts or admin actions. Real data remains
+the default. See [demo setup](docs/DEMO_DATA.md) and [debug settings](docs/DEBUG_SETTINGS.md).
+
+## Development and verification
+
+See [backend setup](backend/README.md) and [backend architecture](docs/BACKEND_STRUCTURE.md).
+After API changes, run `python -m scripts.export_openapi` in `backend`, then
+`npm run generate:api` in `mobile`.
 
 ```powershell
-npm run generate:api
+# backend (with its virtual environment active)
+python -m ruff check app tests
+python -m pytest
+# Optional real PostGIS integration tests use a temporary schema and roll it back.
+$env:CITYPULSE_TEST_POSTGRES = '1'
+python -m pytest
+
+# mobile
 npm run typecheck
-```
-
-`mobile/openapi.json` 是已提交的 API 契约，`mobile/src/api/schema.d.ts` 是生成结果，
-客户端业务类型在 `mobile/src/api/types.ts` 中直接引用生成类型。
-
-## API 概览
-
-地图显示规则、参数与验收方法见 [docs/MAP_DISPLAY.md](docs/MAP_DISPLAY.md)。
-
-| 方法 | 路径 | 用途 |
-| --- | --- | --- |
-| GET | `/health` | 数据库就绪检查 |
-| GET | `/api/v1/events` | 分页信息流和服务端筛选 |
-| GET | `/api/v1/events/map` | PostGIS bbox 视口查询 |
-| GET | `/api/v1/events/nearby-updates` | 15 公里内新发布活动、分页与检查时间 |
-| GET | `/api/v1/events/{id}` | 详情、来源与状态历史 |
-| GET | `/api/v1/meta/categories` | 客户端类别字典 |
-| POST | `/api/v1/corrections` | 提交纠错审核 |
-
-## 验证
-
-后端：
-
-```powershell
-Set-Location backend
-uv sync --all-extras
-uv run ruff check app tests
-uv run pytest
-uv run alembic upgrade head --sql
-```
-
-移动端：
-
-```powershell
-Set-Location mobile
-npm run typecheck
+npm run test:map
+npm run test:guidance
 npx expo export --platform web
+npm run smoke:web
 ```
 
-## 上线前仍需完成
+The browser smoke command serves the built web app on an ephemeral local port and
+uses isolated API fixtures to verify roles, review, drafts, corrections, event
+management, search and pagination. Real PostGIS tests verify transactions and
+Changsha date boundaries separately.
+It does not create accounts or publish events in your database.
 
-当前交付覆盖路线图中的“打地基 + 解锁前端”主路径，不把演示数据包装成生产版本。
-上线前至少还需要：
-
-- 通过 14 天三城样本确定唯一首发城市，并替换演示内容
-- 建 CMS、审核角色和来源授权台账
-- 接入真实采集器、去重、定时复核、限频和 robots 策略
-- 增加认证、服务端收藏、防刷、监控和备份恢复演练
-- 选用有资质的中国地图服务并完成相应合规配置
-- 完成备案、隐私政策、用户协议、投诉删除流程及外部律师复核
+For deployment, serve the API over HTTPS, set explicit CORS origins and database
+credentials, and use a shared edge rate limiter when running multiple workers.
+The included login/register limiter is per process. Password recovery, email
+verification, and cross-device bookmark synchronization are not implemented.

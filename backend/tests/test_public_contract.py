@@ -34,3 +34,17 @@ def test_invalid_bbox_uses_shared_error_envelope() -> None:
 def test_checked_in_openapi_contract_is_current() -> None:
     snapshot = Path(__file__).resolve().parents[2] / "mobile" / "openapi.json"
     assert json.loads(snapshot.read_text(encoding="utf-8")) == app.openapi()
+
+
+def test_admin_update_cors_preflight() -> None:
+    response = client.options(
+        "/api/v1/admin/events/00000000-0000-4000-8000-000000000001",
+        headers={
+            "Origin": "http://localhost:8081",
+            "Access-Control-Request-Method": "PUT",
+            "Access-Control-Request-Headers": "authorization,content-type",
+        },
+    )
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == "http://localhost:8081"
+    assert "PUT" in response.headers["access-control-allow-methods"]

@@ -26,7 +26,8 @@ dataset = build_dataset()
 
 def point(event):
     return {
-        key: event[key] for key in ("id", "name", "category", "status", "starts_at", "ends_at", "published_at")
+        key: event[key]
+        for key in ("id", "name", "category", "status", "starts_at", "ends_at", "published_at")
     } | {"latitude": event["location"]["latitude"], "longitude": event["location"]["longitude"]}
 
 

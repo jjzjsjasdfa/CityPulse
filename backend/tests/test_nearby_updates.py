@@ -36,6 +36,7 @@ def test_radius_and_recent_window_are_filtered_in_postgis(nearby_client):
     assert 15000 in queries[0].params.values()
     assert "ORDER BY events.published_at, events.id" in sql
     assert "events.is_published IS true" in sql
+    assert "events.is_demo IS false" in sql
     assert "events.ends_at >" in sql and "events.status NOT IN" in sql
     checked_at = datetime.fromisoformat(response.json()["checked_at"])
     assert checked_at - timedelta(hours=24) in queries[0].params.values()

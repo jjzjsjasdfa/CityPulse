@@ -1,10 +1,171 @@
-from datetime import date, datetime
+from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, HttpUrl
+from pydantic import AwareDatetime, BaseModel, ConfigDict, EmailStr, Field, HttpUrl, model_validator
 
-from app.models import CorrectionStatus, EventCategory, EventStatus, SourceLevel
+from app.ingestion.enrichment_types import EnrichmentInfo
+from app.models import (
+    CandidateReviewStatus,
+    CorrectionStatus,
+    EventCategory,
+    EventStatus,
+    SourceLevel,
+    UserRole,
+)
+
+
+class Credentials(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    email: EmailStr = Field(max_length=320)
+    password: str = Field(min_length=12, max_length=128)
+
+
+class UserPublic(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: UUID
+    email: str
+    role: UserRole
+
+
+class LoginResponse(BaseModel):
+    access_token: str
+    token_type: Literal["bearer"] = "bearer"
+    expires_at: datetime
+    user: UserPublic
+
+
+class AdminCandidate(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: UUID
+    name: str
+    category: EventCategory
+    organizer: str | None
+    price: str | None
+    venue_name: str | None
+    address: str | None
+    city: str | None
+    district: str | None
+    latitude: float | None
+    longitude: float | None
+    enrichment: EnrichmentInfo = Field(default_factory=EnrichmentInfo)
+    starts_at: datetime | None
+    ends_at: datetime | None
+    official_url: str
+    facts: dict
+    review_status: CandidateReviewStatus
+    updated_at: datetime
+    event_id: UUID | None
+    reviewed_by: UUID | None
+    reviewed_at: datetime | None
+    review_note: str | None
+
+
+class EventFields(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True, allow_inf_nan=False)
+    name: str = Field(min_length=1, max_length=200)
+    category: EventCategory
+    summary: str = Field(min_length=1, max_length=360)
+    description: str = Field(min_length=1, max_length=10000)
+    starts_at: AwareDatetime
+    ends_at: AwareDatetime
+    venue_name: str = Field(min_length=1, max_length=200)
+    address: str = Field(min_length=1, max_length=300)
+    city: str = Field(min_length=1, max_length=80)
+    district: str = Field(min_length=1, max_length=80)
+    latitude: float = Field(ge=-90, le=90)
+    longitude: float = Field(ge=-180, le=180)
+    organizer: str = Field(min_length=1, max_length=180)
+    price: str | None = Field(default=None, max_length=80)
+    status: EventStatus
+    evidence_url: HttpUrl = Field(max_length=500)
+
+    @model_validator(mode="after")
+    def valid_dates(self):
+        if self.ends_at <= self.starts_at:
+            raise ValueError("End time must be after start time")
+        return self
+
+
+class ReviewedEventFields(EventFields):
+    expected_updated_at: AwareDatetime
+    review_note: str = Field(min_length=1, max_length=1000)
+
+
+class CandidateApproval(ReviewedEventFields):
+    pass
+
+
+class AdminEventUpdate(ReviewedEventFields):
+    is_published: bool
+
+
+class AdminEventDetail(EventFields):
+    id: UUID
+    updated_at: datetime
+    is_published: bool
+
+
+class FieldChange(BaseModel):
+    field: str
+    before: str | None
+    after: str | None
+
+
+class CandidateComparison(BaseModel):
+    event_id: UUID | None
+    changes: list[FieldChange]
+
+
+class AdminEventRevision(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: UUID
+    actor_id: UUID
+    correction_id: UUID | None
+    note: str
+    before: dict
+    after: dict
+    created_at: datetime
+
+
+class AdminCorrection(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: UUID
+    event_id: UUID | None
+    kind: str
+    message: str
+    evidence_url: str | None
+    contact_email: str | None
+    status: CorrectionStatus
+    updated_at: datetime
+    created_at: datetime
+    reviewed_by: UUID | None
+    resolution_note: str | None
+
+
+class CorrectionReview(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    expected_updated_at: AwareDatetime
+    status: Literal["reviewing", "accepted", "rejected"]
+    resolution_note: str = Field(min_length=1, max_length=1000)
+    event_update: AdminEventUpdate | None = None
+
+    @model_validator(mode="after")
+    def accepted_update(self):
+        if self.event_update is not None and self.status != "accepted":
+            raise ValueError("Event changes require accepting the correction")
+        return self
+
+
+class CandidateRejection(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    expected_updated_at: AwareDatetime
+    review_note: str = Field(min_length=1, max_length=1000)
+
+
+class CandidateEnrich(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    expected_updated_at: AwareDatetime
 
 
 class Location(BaseModel):
@@ -129,7 +290,7 @@ class CorrectionCreate(BaseModel):
     contact_email: str | None = Field(default=None, max_length=320)
 
 
-class CorrectionPublic(BaseModel):
+class CorrectionReceipt(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
@@ -138,7 +299,7 @@ class CorrectionPublic(BaseModel):
 
 
 class CorrectionResponse(BaseModel):
-    data: CorrectionPublic
+    data: CorrectionReceipt
 
 
 class ApiError(BaseModel):
@@ -149,12 +310,3 @@ class ApiError(BaseModel):
 
 class ApiErrorResponse(BaseModel):
     error: ApiError
-
-
-class EventFilters(BaseModel):
-    city: str = "长沙"
-    date_from: date | None = None
-    date_to: date | None = None
-    category: EventCategory | None = None
-    attribute: str | None = None
-    sort: Literal["newest", "soonest", "ending_soon"] = "soonest"

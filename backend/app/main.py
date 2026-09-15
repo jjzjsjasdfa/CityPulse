@@ -19,7 +19,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
     allow_credentials=False,
-    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_methods=["GET", "POST", "PUT", "OPTIONS"],
     allow_headers=["*"],
 )
 app.include_router(api_router, prefix=settings.api_v1_prefix)
@@ -31,6 +31,7 @@ async def http_error_handler(_: Request, exc: HTTPException) -> JSONResponse:
     details = None if isinstance(exc.detail, str) else exc.detail
     return JSONResponse(
         status_code=exc.status_code,
+        headers=exc.headers,
         content={
             "error": {
                 "code": f"http_{exc.status_code}",
@@ -49,7 +50,10 @@ async def validation_error_handler(_: Request, exc: RequestValidationError) -> J
             "error": {
                 "code": "validation_error",
                 "message": "Request validation failed",
-                "details": jsonable_encoder(exc.errors()),
+                "details": jsonable_encoder([
+                    {"loc": error["loc"], "msg": error["msg"], "type": error["type"]}
+                    for error in exc.errors()
+                ]),
             }
         },
     )

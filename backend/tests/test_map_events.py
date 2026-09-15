@@ -47,6 +47,7 @@ def test_province_query_is_not_restricted_to_changsha(map_client):
     sql = str(session.queries[0]).split("WHERE")[1]
     assert "events.city =" not in sql
     assert "ST_Intersects" in sql
+    assert "events.is_demo IS false" in sql
     assert "events.ends_at >" in sql
     assert "ORDER BY events.starts_at, events.id" in sql
     assert response.json()["meta"] == {"count": 0, "has_next": False, "next_offset": None}
