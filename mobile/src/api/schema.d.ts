@@ -277,6 +277,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/events/nearby-updates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Nearby Updates */
+        get: operations["nearby_updates_api_v1_events_nearby_updates_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/events/{event_id}": {
         parameters: {
             query?: never;
@@ -918,6 +935,8 @@ export interface components {
         };
         /** MapEvent */
         MapEvent: {
+            /** Published At */
+            published_at?: string | null;
             /**
              * Id
              * Format: uuid
@@ -932,6 +951,11 @@ export interface components {
              * Format: date-time
              */
             starts_at: string;
+            /**
+             * Ends At
+             * Format: date-time
+             */
+            ends_at: string;
             /** Latitude */
             latitude: number;
             /** Longitude */
@@ -941,10 +965,58 @@ export interface components {
         MapEventsResponse: {
             /** Data */
             data: components["schemas"]["MapEvent"][];
-            /** Meta */
-            meta: {
-                [key: string]: number;
-            };
+            meta: components["schemas"]["MapPageMeta"];
+        };
+        /** MapPageMeta */
+        MapPageMeta: {
+            /** Count */
+            count: number;
+            /** Has Next */
+            has_next: boolean;
+            /** Next Offset */
+            next_offset: number | null;
+        };
+        /** NearbyEvent */
+        NearbyEvent: {
+            /**
+             * Published At
+             * Format: date-time
+             */
+            published_at: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            category: components["schemas"]["EventCategory"];
+            status: components["schemas"]["EventStatus"];
+            /**
+             * Starts At
+             * Format: date-time
+             */
+            starts_at: string;
+            /**
+             * Ends At
+             * Format: date-time
+             */
+            ends_at: string;
+            /** Latitude */
+            latitude: number;
+            /** Longitude */
+            longitude: number;
+        };
+        /** NearbyEventsResponse */
+        NearbyEventsResponse: {
+            /** Data */
+            data: components["schemas"]["NearbyEvent"][];
+            meta: components["schemas"]["MapPageMeta"];
+            /**
+             * Checked At
+             * Format: date-time
+             */
+            checked_at: string;
         };
         /** PageMeta */
         PageMeta: {
@@ -1595,7 +1667,9 @@ export interface operations {
                 south: number;
                 east: number;
                 north: number;
-                city?: string;
+                city?: string | null;
+                offset?: number;
+                limit?: number;
                 date_from?: string | null;
                 date_to?: string | null;
                 category?: components["schemas"]["EventCategory"] | null;
@@ -1613,6 +1687,43 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MapEventsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    nearby_updates_api_v1_events_nearby_updates_get: {
+        parameters: {
+            query: {
+                latitude: number;
+                longitude: number;
+                radius_km?: number;
+                since?: string | null;
+                until?: string | null;
+                offset?: number;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NearbyEventsResponse"];
                 };
             };
             /** @description Validation Error */

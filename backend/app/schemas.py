@@ -241,18 +241,36 @@ class EventDetailResponse(BaseModel):
 
 
 class MapEvent(BaseModel):
+    published_at: datetime | None = None
     id: UUID
     name: str
     category: EventCategory
     status: EventStatus
     starts_at: datetime
+    ends_at: datetime
     latitude: float
     longitude: float
 
 
+class MapPageMeta(BaseModel):
+    count: int
+    has_next: bool
+    next_offset: int | None
+
+
 class MapEventsResponse(BaseModel):
     data: list[MapEvent]
-    meta: dict[str, int]
+    meta: MapPageMeta
+
+
+class NearbyEvent(MapEvent):
+    published_at: datetime
+
+
+class NearbyEventsResponse(BaseModel):
+    data: list[NearbyEvent]
+    meta: MapPageMeta
+    checked_at: datetime
 
 
 class CategoryOption(BaseModel):

@@ -23,6 +23,9 @@ export type LoginResponse = components['schemas']['LoginResponse'];
 export type Candidate = components['schemas']['AdminCandidate'];
 export type CandidateApproval = components['schemas']['CandidateApproval'];
 export type CandidateStatus = components['schemas']['CandidateReviewStatus'];
+export type MapEventsResponse = components['schemas']['MapEventsResponse'];
+export type NearbyEvent = components['schemas']['NearbyEvent'];
+export type NearbyEventsResponse = components['schemas']['NearbyEventsResponse'];
 
 export interface ApiErrorEnvelope {
   error?: { code?: string; message?: string; details?: unknown };

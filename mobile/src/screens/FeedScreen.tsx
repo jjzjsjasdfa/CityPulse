@@ -43,20 +43,10 @@ export function FeedScreen(props: Props) {
               <Text style={styles.eyebrow}>CITYPULSE · 长沙</Text>
               <Text style={styles.title}>这座城，{`\n`}正在发生</Text>
             </View>
-            <View style={styles.cityButton}>
-              <Text style={styles.cityText}>长沙</Text>
-            </View>
-          </View>
-          <View style={styles.signalCard}>
-            <Text style={styles.signalIcon}>⌁</Text>
-            <View style={styles.signalCopy}>
-              <Text style={styles.signalTitle}>事实优先，不让热度替你决定</Text>
-              <Text style={styles.signalText}>每条活动都展示来源、状态与最近核验时间。</Text>
-            </View>
           </View>
           {props.offline && (
             <View style={styles.offlineBanner}>
-              <Text style={styles.offlineText}>连接服务失败，请重试。</Text>
+              <Text style={styles.offlineText}>活动数据暂不可用 · 连接服务后下拉刷新</Text>
               <Pressable accessibilityRole="button" onPress={props.onRefresh}><Text style={styles.offlineText}>重新加载</Text></Pressable>
             </View>
           )}

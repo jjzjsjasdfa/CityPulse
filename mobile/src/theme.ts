@@ -25,14 +25,20 @@ export const categoryLabels: Record<EventCategory, string> = {
 };
 
 export const categoryColors: Record<EventCategory, string> = {
-  performance: '#EE7857',
-  sports: '#68A492',
-  exhibition: '#7C83B8',
-  festival: '#E7B64D',
-  market: '#D98958',
-  public_culture: '#5B91A6',
-  pop_up: '#C76D8B',
-  seasonal: '#77965A',
+  performance: '#BC4436',
+  sports: '#207564',
+  exhibition: '#6956A7',
+  festival: '#896208',
+  market: '#A45524',
+  public_culture: '#246C91',
+  pop_up: '#A43F72',
+  seasonal: '#586F24',
+};
+
+// Brighter signals remain distinct from the darker, readable map label palette.
+export const signalColors: Record<EventCategory, string> = {
+  performance: '#FF786B', sports: '#38DEBB', exhibition: '#AF91FF', festival: '#FFE165',
+  market: '#FFAF69', public_culture: '#63CEFF', pop_up: '#FF86C5', seasonal: '#B5ED69',
 };
 
 export const statusLabels: Record<EventStatus, string> = {
@@ -52,4 +58,3 @@ export const formatDate = (value: string, includeTime = true) =>
     weekday: 'short',
     ...(includeTime ? { hour: '2-digit', minute: '2-digit', hour12: false } : {}),
   }).format(new Date(value));
-

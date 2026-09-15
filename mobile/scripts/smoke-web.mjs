@@ -11,7 +11,7 @@ const server = createServer(async (request, response) => {
   if (path !== root && !path.startsWith(root + sep)) { response.writeHead(403).end(); return; }
   try {
     const file = path === root ? resolve(root, 'index.html') : path;
-    const mime = { '.html': 'text/html', '.js': 'application/javascript', '.ico': 'image/x-icon' };
+    const mime = { '.html': 'text/html', '.js': 'application/javascript', '.css': 'text/css', '.ico': 'image/x-icon' };
     response.setHeader('Content-Type', mime[extname(file)] ?? 'application/octet-stream');
     response.end(await readFile(file));
   } catch { response.writeHead(404).end(); }
@@ -156,13 +156,13 @@ try {
   await page.getByLabel('密码', { exact: true }).fill('browser-test-password');
   await page.getByRole('button', { name: '注册并登录', exact: true }).click();
   await page.getByText('这个筛选下还没有已审核的活动。').waitFor();
-  assert.equal(await page.getByRole('button', { name: '✓ 审核', exact: true }).count(), 0);
+  assert.equal(await page.getByRole('button', { name: '审核', exact: true }).count(), 0);
   assert.equal(privateRequests, 0);
   await page.getByRole('button', { name: '退出', exact: true }).click();
   await page.getByLabel('邮箱', { exact: true }).fill('admin@example.com');
   await page.getByLabel('密码', { exact: true }).fill('browser-test-password');
   await page.getByRole('button', { name: '登录', exact: true }).click();
-  await page.getByRole('button', { name: '✓ 审核', exact: true }).click();
+  await page.getByRole('button', { name: '审核', exact: true }).click();
   await page.getByText('Browser test concert 1', { exact: true }).click();
   await page.getByLabel('审核记录 / 拒绝原因', { exact: true }).fill('Verified browser test');
   await page.getByRole('button', { name: '通过并公开', exact: true }).click();
@@ -221,7 +221,7 @@ try {
   await page.getByText('该活动已结束。通过后将显示在发现页的「往期活动」，不会出现在近期活动中。').waitFor();
   await clickFormAction('通过并公开');
   await page.getByText('审核通过，活动已公开。该活动已结束，可在发现页的「往期活动」中查看。').waitFor();
-  await page.getByRole('button', { name: '⌁ 发现', exact: true }).click();
+  await page.getByRole('button', { name: '发现', exact: true }).click();
   await page.getByRole('button', { name: '查看Browser test concert 1' }).waitFor();
   assert.equal(await page.getByRole('button', { name: '查看Browser test concert 3' }).count(), 0);
   await page.getByRole('button', { name: '往期活动', exact: true }).click();
@@ -234,7 +234,7 @@ try {
   await page.getByRole('button', { name: '登录', exact: true }).click();
   await page.getByRole('button', { name: '查看Browser test concert 1' }).waitFor();
   assert.equal(await page.getByText('Browser test concert 2', { exact: true }).count(), 0);
-  assert.equal(await page.getByRole('button', { name: '✓ 审核', exact: true }).count(), 0);
+  assert.equal(await page.getByRole('button', { name: '审核', exact: true }).count(), 0);
   await page.getByRole('button', { name: '往期活动', exact: true }).click();
   await page.getByRole('button', { name: '查看Browser test concert 3' }).waitFor();
   assert.equal(await page.getByRole('button', { name: '查看Browser test concert 1' }).count(), 0);
@@ -246,12 +246,12 @@ try {
   await page.getByLabel('纠错说明').fill('The event venue address needs a correction.');
   await page.getByRole('button', { name: '提交审核', exact: true }).click();
   await page.getByText('纠错已进入审核队列，感谢你帮助保持信息准确。').waitFor();
-  await page.getByRole('button', { name: '×', exact: true }).click();
+  await page.getByRole('button', { name: '关闭活动详情', exact: true }).click();
   await page.getByRole('button', { name: '退出', exact: true }).click();
   await page.getByLabel('邮箱', { exact: true }).fill('admin@example.com');
   await page.getByLabel('密码', { exact: true }).fill('browser-test-password');
   await page.getByRole('button', { name: '登录', exact: true }).click();
-  await page.getByRole('button', { name: '✓ 审核', exact: true }).click();
+  await page.getByRole('button', { name: '审核', exact: true }).click();
   await page.getByRole('button', { name: '纠错收件箱', exact: true }).click();
   await page.getByText('The event venue address needs a correction.', { exact: true }).click();
   await page.getByRole('button', { name: '编辑活动并应用纠错', exact: true }).click();
@@ -273,7 +273,7 @@ try {
   await page.getByLabel('审核记录 / 拒绝原因', { exact: true }).fill('Remove from public listing');
   await clickFormAction('保存活动修改');
   await page.getByText('已保存，公开活动信息已同步。').waitFor();
-  await page.getByRole('button', { name: '⌁ 发现', exact: true }).click();
+  await page.getByRole('button', { name: '发现', exact: true }).click();
   await page.getByText('这个筛选下还没有已审核的活动。').waitFor();
   assert.equal(events[0].is_published, false);
   await page.screenshot({ path: 'artifacts/management-smoke.png', fullPage: true });

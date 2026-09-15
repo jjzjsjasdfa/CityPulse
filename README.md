@@ -76,15 +76,26 @@ docker compose exec api python -m app.ingestion --dry-run --limit 20
 docker compose exec api python -m app.ingestion --limit 100
 ```
 
-There is no seed script, synthetic event fallback, fabricated popularity count or
-illustrated map standing in for real coordinates. The web map uses OpenStreetMap;
+Production uses real imported events without a synthetic fallback or fabricated popularity counts. The web map uses OpenStreetMap;
 native maps use the device map provider. Missing source facts must be verified by
 an administrator; the importer reads Showstart detail addresses, coordinates and
 time ranges without guessing event duration or organizer. Administrators can use
 **补充详情和地点** on existing candidates. An optional server-side `AMAP_API_KEY`
 enables city + venue-name lookup when the source location is incomplete.
 Existing demo database rows are preserved but unpublished and excluded by all
-public event endpoints. Test fixtures are confined to tests.
+public event endpoints. Synthetic fixtures are confined to tests and the explicitly enabled demo service.
+
+## Maps and optional debug mode
+
+The map supports continuous zoom, category controls, collision-aware markers,
+location guidance, and nearby publication alerts. Viewport queries paginate and
+support areas outside Changsha. Saved event coordinates persist per account.
+See [map behavior](docs/MAP_DISPLAY.md) and [location guidance](docs/LOCATION_GUIDANCE.md).
+
+**我的 → 设置** provides an explicit debug switch with a simulated clock, location,
+alert replay and performance monitor. Debug mode uses a separate in-memory API
+and storage namespace, never production accounts or admin actions. Real data remains
+the default. See [demo setup](docs/DEMO_DATA.md) and [debug settings](docs/DEBUG_SETTINGS.md).
 
 ## Development and verification
 
@@ -102,6 +113,8 @@ python -m pytest
 
 # mobile
 npm run typecheck
+npm run test:map
+npm run test:guidance
 npx expo export --platform web
 npm run smoke:web
 ```
