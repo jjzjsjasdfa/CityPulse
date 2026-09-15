@@ -8,7 +8,7 @@ from sqlalchemy import cast, func
 from sqlmodel import Session, select
 
 from app.core.database import get_session
-from app.models import Event, EventCategory, EventSourceLink, Source, StatusHistory
+from app.models import Event, EventCategory, EventSourceLink, EventStatus, Source, StatusHistory
 from app.schemas import (
     EventDetail,
     EventDetailResponse,
@@ -17,6 +17,9 @@ from app.schemas import (
     Location,
     MapEvent,
     MapEventsResponse,
+    MapPageMeta,
+    NearbyEvent,
+    NearbyEventsResponse,
     PageMeta,
     SourceEvidence,
     StatusHistoryPublic,
@@ -125,14 +128,17 @@ def map_events(
     south: float = Query(ge=-90, le=90),
     east: float = Query(ge=-180, le=180),
     north: float = Query(ge=-90, le=90),
-    city: str = Query(default="长沙", min_length=1, max_length=80),
+    city: str | None = Query(default=None, min_length=1, max_length=80),
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=500, ge=1, le=500),
     date_from: date | None = None,
     date_to: date | None = None,
     category: EventCategory | None = None,
 ) -> MapEventsResponse:
     if west >= east or south >= north:
         raise HTTPException(status_code=422, detail="Invalid bounding box")
-    if east - west > 5 or north - south > 5:
+    # Province-scale viewports are supported; nationwide views use local favorites.
+    if east - west > 20 or north - south > 30:
         raise HTTPException(status_code=422, detail="Bounding box is too large")
 
     now = datetime.now(UTC)
@@ -140,10 +146,11 @@ def map_events(
     geometry = cast(Event.location, Geometry(geometry_type="POINT", srid=4326))
     conditions = [
         Event.is_published.is_(True),
-        Event.city == city,
-        Event.ends_at >= now,
+        Event.ends_at > now,
         func.ST_Intersects(geometry, envelope),
     ]
+    if city:
+        conditions.append(Event.city == city)
     if date_from:
         conditions.append(Event.ends_at >= _date_start(date_from))
     if date_to:
@@ -152,22 +159,83 @@ def map_events(
         conditions.append(Event.category == category)
 
     events = session.exec(
-        select(Event).where(*conditions).order_by(Event.starts_at).limit(500)
+        select(Event)
+        .where(*conditions)
+        .order_by(Event.starts_at, Event.id)
+        .offset(offset)
+        .limit(limit + 1)
     ).all()
+    has_next = len(events) > limit
+    events = events[:limit]
     return MapEventsResponse(
         data=[
             MapEvent(
+                published_at=event.published_at,
                 id=event.id,
                 name=event.name,
                 category=event.category,
                 status=event.status,
                 starts_at=event.starts_at,
+                ends_at=event.ends_at,
                 latitude=event.latitude,
                 longitude=event.longitude,
             )
             for event in events
         ],
-        meta={"count": len(events)},
+        meta=MapPageMeta(
+            count=len(events),
+            has_next=has_next,
+            next_offset=offset + len(events) if has_next else None,
+        ),
+    )
+
+
+@router.get("/nearby-updates", response_model=NearbyEventsResponse)
+def nearby_updates(
+    session: SessionDep,
+    latitude: float = Query(ge=-85, le=85),
+    longitude: float = Query(ge=-180, le=180),
+    radius_km: float = Query(default=15, gt=0, le=15),
+    since: datetime | None = None,
+    until: datetime | None = None,
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=500, ge=1, le=500),
+) -> NearbyEventsResponse:
+    now = datetime.now(UTC)
+    # A fixed upper bound is returned to keep pagination and the next poll consistent.
+    if any(value is not None and value.tzinfo is None for value in (since, until)):
+        raise HTTPException(status_code=422, detail="Update timestamps require a timezone")
+    checked_at = min(until, now) if until else now
+    start = since or checked_at - timedelta(hours=24)
+    if start > checked_at:
+        raise HTTPException(status_code=422, detail="Invalid update time range")
+    origin = func.ST_SetSRID(func.ST_MakePoint(longitude, latitude), 4326)
+    rows = session.exec(
+        select(Event)
+        .where(
+            Event.is_published.is_(True),
+            Event.ends_at > now,
+            Event.published_at >= start,
+            Event.published_at <= checked_at,
+            Event.status.notin_([EventStatus.ended, EventStatus.cancelled, EventStatus.postponed]),
+            func.ST_DWithin(Event.location, cast(origin, Event.__table__.c.location.type),
+                            radius_km * 1000),
+        )
+        .order_by(Event.published_at, Event.id)
+        .offset(offset)
+        .limit(limit + 1)
+    ).all()
+    has_next = len(rows) > limit
+    rows = rows[:limit]
+    return NearbyEventsResponse(
+        data=[NearbyEvent(
+            id=event.id, name=event.name, category=event.category, status=event.status,
+            starts_at=event.starts_at, ends_at=event.ends_at, published_at=event.published_at,
+            latitude=event.latitude, longitude=event.longitude,
+        ) for event in rows],
+        meta=MapPageMeta(count=len(rows), has_next=has_next,
+                         next_offset=offset + len(rows) if has_next else None),
+        checked_at=checked_at,
     )
 
 
