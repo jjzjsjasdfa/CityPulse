@@ -15,6 +15,10 @@ New to the backend? Read the line-by-line architecture guide:
 
 - 信息流：分页、类别、刚上新、临期筛选与排序
 - 地图：按当前视口调用 PostGIS bbox 查询，GiST 空间索引
+- 地图分级：远景仅收藏 → 省域彩色圆点 → 城市彩色类别 → 街区活动名称；圆点按时间分六档
+- 定位与新活动：启动以自己为中心，默认 500 米比例尺；附近 15 公里新活动通过八方向渐变波浪提示
+- 连续缩放：触屏双指缩放自动切换圆点、类别与名称，带交叉淡入淡出；网页接入真实底图
+- 临时测试：[200 条虚构活动与长沙定位](docs/DEMO_DATA.md)，接口与正式 PostGIS 服务保持一致
 - 详情：时间地点、状态、来源证据、最近核验时间、可信度、状态历史
 - 收藏：本机持久化，不收集账号或位置
 - 分享与纠错：系统分享；纠错进入后端审核队列
@@ -86,11 +90,14 @@ npm run typecheck
 
 ## API 概览
 
+地图显示规则、参数与验收方法见 [docs/MAP_DISPLAY.md](docs/MAP_DISPLAY.md)。
+
 | 方法 | 路径 | 用途 |
 | --- | --- | --- |
 | GET | `/health` | 数据库就绪检查 |
 | GET | `/api/v1/events` | 分页信息流和服务端筛选 |
 | GET | `/api/v1/events/map` | PostGIS bbox 视口查询 |
+| GET | `/api/v1/events/nearby-updates` | 15 公里内新发布活动、分页与检查时间 |
 | GET | `/api/v1/events/{id}` | 详情、来源与状态历史 |
 | GET | `/api/v1/meta/categories` | 客户端类别字典 |
 | POST | `/api/v1/corrections` | 提交纠错审核 |

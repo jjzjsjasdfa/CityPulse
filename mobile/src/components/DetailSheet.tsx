@@ -83,7 +83,7 @@ export function DetailSheet({ event, loading, saved, onClose, onToggleSaved, onS
     <Modal animationType="slide" onRequestClose={onClose} presentationStyle="pageSheet" visible>
       <View style={styles.container}>
         <View style={styles.topBar}>
-          <Pressable accessibilityRole="button" hitSlop={10} onPress={onClose}>
+          <Pressable accessibilityRole="button" accessibilityLabel="关闭活动详情" hitSlop={10} onPress={onClose}>
             <Text style={styles.close}>×</Text>
           </Pressable>
           <Text style={styles.topTitle}>活动详情</Text>
@@ -198,8 +198,8 @@ export function DetailSheet({ event, loading, saved, onClose, onToggleSaved, onS
             >
               <Text style={styles.shareText}>分享活动</Text>
             </Pressable>
-            <Pressable onPress={() => Linking.openURL(event.official_url)} style={styles.officialButton}>
-              <Text style={styles.officialText}>前往官方页面 ↗</Text>
+            <Pressable disabled={!event.official_url} onPress={() => Linking.openURL(event.official_url)} style={styles.officialButton}>
+              <Text style={styles.officialText}>{event.official_url ? '前往官方页面 ↗' : '测试活动 · 无官方页面'}</Text>
             </Pressable>
           </View>
           {shareError && (
@@ -288,4 +288,3 @@ const styles = StyleSheet.create({
   officialText: { color: colors.white, textAlign: 'center', fontWeight: '900' },
   disclaimer: { color: colors.inkMuted, fontSize: 11, textAlign: 'center', margin: 16 },
 });
-

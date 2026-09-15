@@ -213,11 +213,40 @@
             "in": "query",
             "required": false,
             "schema": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 80,
-              "default": "长沙",
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 80
+                },
+                {
+                  "type": "null"
+                }
+              ],
               "title": "City"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 500,
+              "minimum": 1,
+              "default": 500,
+              "title": "Limit"
             }
           },
           {
@@ -278,6 +307,130 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/MapEventsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/events/nearby-updates": {
+      "get": {
+        "tags": [
+          "events"
+        ],
+        "summary": "Nearby Updates",
+        "operationId": "nearby_updates_api_v1_events_nearby_updates_get",
+        "parameters": [
+          {
+            "name": "latitude",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "number",
+              "maximum": 85,
+              "minimum": -85,
+              "title": "Latitude"
+            }
+          },
+          {
+            "name": "longitude",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "number",
+              "maximum": 180,
+              "minimum": -180,
+              "title": "Longitude"
+            }
+          },
+          {
+            "name": "radius_km",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "maximum": 15,
+              "exclusiveMinimum": 0,
+              "default": 15,
+              "title": "Radius Km"
+            }
+          },
+          {
+            "name": "since",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Since"
+            }
+          },
+          {
+            "name": "until",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Until"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 500,
+              "minimum": 1,
+              "default": 500,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NearbyEventsResponse"
                 }
               }
             }
@@ -926,6 +1079,18 @@
       },
       "MapEvent": {
         "properties": {
+          "published_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published At"
+          },
           "id": {
             "type": "string",
             "format": "uuid",
@@ -946,6 +1111,11 @@
             "format": "date-time",
             "title": "Starts At"
           },
+          "ends_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Ends At"
+          },
           "latitude": {
             "type": "number",
             "title": "Latitude"
@@ -962,6 +1132,7 @@
           "category",
           "status",
           "starts_at",
+          "ends_at",
           "latitude",
           "longitude"
         ],
@@ -977,11 +1148,7 @@
             "title": "Data"
           },
           "meta": {
-            "additionalProperties": {
-              "type": "integer"
-            },
-            "type": "object",
-            "title": "Meta"
+            "$ref": "#/components/schemas/MapPageMeta"
           }
         },
         "type": "object",
@@ -990,6 +1157,117 @@
           "meta"
         ],
         "title": "MapEventsResponse"
+      },
+      "MapPageMeta": {
+        "properties": {
+          "count": {
+            "type": "integer",
+            "title": "Count"
+          },
+          "has_next": {
+            "type": "boolean",
+            "title": "Has Next"
+          },
+          "next_offset": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Offset"
+          }
+        },
+        "type": "object",
+        "required": [
+          "count",
+          "has_next",
+          "next_offset"
+        ],
+        "title": "MapPageMeta"
+      },
+      "NearbyEvent": {
+        "properties": {
+          "published_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Published At"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "category": {
+            "$ref": "#/components/schemas/EventCategory"
+          },
+          "status": {
+            "$ref": "#/components/schemas/EventStatus"
+          },
+          "starts_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Starts At"
+          },
+          "ends_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Ends At"
+          },
+          "latitude": {
+            "type": "number",
+            "title": "Latitude"
+          },
+          "longitude": {
+            "type": "number",
+            "title": "Longitude"
+          }
+        },
+        "type": "object",
+        "required": [
+          "published_at",
+          "id",
+          "name",
+          "category",
+          "status",
+          "starts_at",
+          "ends_at",
+          "latitude",
+          "longitude"
+        ],
+        "title": "NearbyEvent"
+      },
+      "NearbyEventsResponse": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/NearbyEvent"
+            },
+            "type": "array",
+            "title": "Data"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/MapPageMeta"
+          },
+          "checked_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Checked At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data",
+          "meta",
+          "checked_at"
+        ],
+        "title": "NearbyEventsResponse"
       },
       "PageMeta": {
         "properties": {

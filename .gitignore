@@ -8,6 +8,7 @@ __pycache__/
 .python/
 .uv-cache/
 backend/.venv/
+backend/.test-deps/
 mobile/.expo/
 mobile/node_modules/
 mobile/dist/
