@@ -301,6 +301,13 @@ function CityPulse({ initialTab, auth, onLogout, settings, onApplySettings }: { 
         {tab === 'settings' && <SettingsScreen settings={settings} onApply={onApplySettings} onBack={() => setTab('saved')} />}
         {tab === 'feed' && (
           <FeedScreen
+            onOpenPosterEvent={openId}
+            onSavePosterEvent={async (id) => {
+              if (!savedReady) throw new Error('收藏尚未加载，请稍后重试');
+              const event = await getEvent(id);
+              setKnownEvents(current => [...current.filter(item => item.id !== id), event]);
+              setSavedIds(current => new Set([...current, id]));
+            }}
             events={events}
             query={query}
             when={when}

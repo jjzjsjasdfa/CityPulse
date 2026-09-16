@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "Contract-first city happenings API"
 requires-python = ">=3.12"
 dependencies = [
+  "Pillow>=11,<13",
   "alembic>=1.16.0,<2",
   "fastapi[standard]>=0.116.0,<1",
   "geoalchemy2>=0.18.0,<1",

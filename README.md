@@ -129,3 +129,14 @@ For deployment, serve the API over HTTPS, set explicit CORS origins and database
 credentials, and use a shared edge rate limiter when running multiple workers.
 The included login/register limiter is per process. Password recovery, email
 verification, and cross-device bookmark synchronization are not implemented.
+
+## Poster discovery and local PaddleOCR
+
+The Discover page accepts event posters and sends them to the local OCR worker.
+`docker compose up --build -d` starts PostGIS, the API, and the CPU PaddleOCR service.
+Dependencies are pinned in `ocr/requirements.lock.txt`; model weights are downloaded
+on first use and retained in the `ocr-models` Docker volume, never committed to Git.
+Set `POSTGRES_PORT=5433` in your untracked `.env` if port 5432 is already occupied.
+
+See [PaddleOCR setup and collaboration](docs/PADDLE_OCR.md) and
+[poster submission and review workflow](docs/POSTER_DISCOVERY.md).

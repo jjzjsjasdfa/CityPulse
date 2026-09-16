@@ -16,9 +16,15 @@ export function setAuthHandler(handler: () => void) { onUnauthorized = handler; 
 export function clearSession() { accessToken = null; }
 
 const emulatorHost = Platform.OS === 'android' ? '10.0.2.2' : 'localhost';
+function developmentHost() {
+  if (__DEV__ && Platform.OS !== 'web' && Constants.expoConfig?.hostUri) {
+    try { return new URL(`http://${Constants.expoConfig.hostUri.replace(/^https?:\/\//, '')}`).hostname; } catch {}
+  }
+  return emulatorHost;
+}
 export const apiURL = () => DEMO_MODE ? demoApiURL(process.env.EXPO_PUBLIC_DEMO_API_URL, Constants.expoConfig?.hostUri, Platform.OS,
   Platform.OS === 'web' && typeof window !== 'undefined' ? window.location.hostname : undefined) :
-  (process.env.EXPO_PUBLIC_API_URL ?? `http://${emulatorHost}:8000/api/v1`);
+  (process.env.EXPO_PUBLIC_API_URL ?? `http://${developmentHost()}:8000/api/v1`);
 export const demoURL = (path: string) => `${apiURL()}${path}${path.includes('?') ? '&' : '?'}${demoQuery()}`;
 
 export class ApiError extends Error {
@@ -30,7 +36,7 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(DEMO_MODE ? demoURL(path) : `${apiURL()}${path}`, {
     ...init,
     headers: { 'Content-Type': 'application/json', ...(!DEMO_MODE && accessToken ? { Authorization: `Bearer ${accessToken}` } : {}), ...init?.headers },

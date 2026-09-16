@@ -16,3 +16,7 @@ mobile/dist-preview/
 mobile/artifacts/
 .edge-preview*/
 .chrome-preview*/
+.paddlex/
+.paddleocr/
+ocr/models/
+ocr/.venv/

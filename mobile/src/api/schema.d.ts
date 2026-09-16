@@ -4,6 +4,160 @@
  */
 
 export interface paths {
+    "/api/v1/artists": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Artists */
+        get: operations["artists_api_v1_artists_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/artists": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Artist */
+        post: operations["create_artist_api_v1_admin_artists_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/artists/{artist_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Update Artist */
+        put: operations["update_artist_api_v1_admin_artists__artist_id__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/posters": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** History */
+        get: operations["history_api_v1_posters_get"];
+        put?: never;
+        /** Upload */
+        post: operations["upload_api_v1_posters_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/posters/{poster_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Poster */
+        get: operations["get_poster_api_v1_posters__poster_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/posters": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Queue */
+        get: operations["queue_api_v1_admin_posters_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/posters/{poster_id}/image": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Poster Image */
+        get: operations["poster_image_api_v1_admin_posters__poster_id__image_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/posters/{poster_id}/review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Review */
+        post: operations["review_api_v1_admin_posters__poster_id__review_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/events/{event_id}/background": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Background */
+        get: operations["background_api_v1_events__event_id__background_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/register": {
         parameters: {
             query?: never;
@@ -586,6 +740,49 @@ export interface components {
             /** Is Published */
             is_published: boolean;
         };
+        /** ArtistInput */
+        ArtistInput: {
+            /** Name */
+            name: string;
+            /** Birth Date */
+            birth_date?: string | null;
+            /**
+             * Gender
+             * @default
+             */
+            gender: string;
+            /**
+             * Hometown
+             * @default
+             */
+            hometown: string;
+            /** Aliases */
+            aliases?: string[];
+            /**
+             * Fan Name
+             * @default
+             */
+            fan_name: string;
+            /**
+             * Support Color
+             * @default
+             */
+            support_color: string;
+            /**
+             * Agency
+             * @default
+             */
+            agency: string;
+            /**
+             * Honors
+             * @default
+             */
+            honors: string;
+            /** Works */
+            works?: components["schemas"]["Work"][];
+            /** References */
+            references?: components["schemas"]["Reference"][];
+        };
         /** CandidateApproval */
         CandidateApproval: {
             /** Name */
@@ -828,6 +1025,48 @@ export interface components {
         EventDetailResponse: {
             data: components["schemas"]["EventDetail"];
         };
+        /** EventFields */
+        EventFields: {
+            /** Name */
+            name: string;
+            category: components["schemas"]["EventCategory"];
+            /** Summary */
+            summary: string;
+            /** Description */
+            description: string;
+            /**
+             * Starts At
+             * Format: date-time
+             */
+            starts_at: string;
+            /**
+             * Ends At
+             * Format: date-time
+             */
+            ends_at: string;
+            /** Venue Name */
+            venue_name: string;
+            /** Address */
+            address: string;
+            /** City */
+            city: string;
+            /** District */
+            district: string;
+            /** Latitude */
+            latitude: number;
+            /** Longitude */
+            longitude: number;
+            /** Organizer */
+            organizer: string;
+            /** Price */
+            price?: string | null;
+            status: components["schemas"]["EventStatus"];
+            /**
+             * Evidence Url
+             * Format: uri
+             */
+            evidence_url: string;
+        };
         /** EventPage */
         EventPage: {
             /** Data */
@@ -1047,6 +1286,30 @@ export interface components {
             latitude: number;
             source_coordinates: components["schemas"]["SourceCoordinates"];
         };
+        /** Reference */
+        Reference: {
+            /** Label */
+            label: string;
+            /**
+             * Url
+             * Format: uri
+             */
+            url: string;
+        };
+        /** Review */
+        Review: {
+            /** Approve */
+            approve: boolean;
+            /** Note */
+            note: string;
+            /** Event Id */
+            event_id?: string | null;
+            new_event?: components["schemas"]["EventFields"] | null;
+            /** Artist Ids */
+            artist_ids?: string[];
+            /** References */
+            references?: components["schemas"]["Reference"][];
+        };
         /** SourceCoordinates */
         SourceCoordinates: {
             /** Longitude */
@@ -1106,6 +1369,11 @@ export interface components {
             /** Source Name */
             source_name?: string | null;
         };
+        /** Upload */
+        Upload: {
+            /** Image Base64 */
+            image_base64: string;
+        };
         /** UserPublic */
         UserPublic: {
             /**
@@ -1135,6 +1403,26 @@ export interface components {
             /** Context */
             ctx?: Record<string, never>;
         };
+        /** Work */
+        Work: {
+            /** Name */
+            name: string;
+            /**
+             * Language
+             * @default
+             */
+            language: string;
+            /**
+             * Category
+             * @default
+             */
+            category: string;
+            /**
+             * Released
+             * @default
+             */
+            released: string;
+        };
     };
     responses: never;
     parameters: never;
@@ -1144,6 +1432,306 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    artists_api_v1_artists_get: {
+        parameters: {
+            query?: {
+                q?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_artist_api_v1_admin_artists_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ArtistInput"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_artist_api_v1_admin_artists__artist_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                artist_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ArtistInput"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    history_api_v1_posters_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    upload_api_v1_posters_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Upload"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_poster_api_v1_posters__poster_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                poster_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    queue_api_v1_admin_posters_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    poster_image_api_v1_admin_posters__poster_id__image_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                poster_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    review_api_v1_admin_posters__poster_id__review_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                poster_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Review"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    background_api_v1_events__event_id__background_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                event_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     register_api_v1_auth_register_post: {
         parameters: {
             query?: never;
