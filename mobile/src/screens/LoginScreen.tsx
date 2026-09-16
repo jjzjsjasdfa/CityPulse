@@ -12,10 +12,20 @@ export function LoginScreen({ onLogin }: { onLogin: (session: LoginResponse) => 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const submit = async () => {
+    if (busy) return;
+    const normalizedEmail = email.trim();
+    if (!normalizedEmail) {
+      setError('请输入邮箱');
+      return;
+    }
+    if (password.length < 12) {
+      setError('密码须为 12–128 个字符');
+      return;
+    }
     setBusy(true); setError('');
     try {
-      if (creating) await register(email.trim(), password);
-      onLogin(await signIn(email.trim(), password));
+      if (creating) await register(normalizedEmail, password);
+      onLogin(await signIn(normalizedEmail, password));
     } catch (err) { setError(err instanceof Error ? err.message : '登录失败，请重试'); }
     finally { setBusy(false); }
   };
@@ -26,12 +36,16 @@ export function LoginScreen({ onLogin }: { onLogin: (session: LoginResponse) => 
     <Text style={styles.label}>邮箱</Text>
     <TextInput accessibilityLabel="邮箱" autoCapitalize="none" autoComplete="email" keyboardType="email-address" value={email} onChangeText={setEmail} style={styles.input} />
     <Text style={styles.label}>密码（12–128 个字符）</Text>
-    <TextInput accessibilityLabel="密码" autoCapitalize="none" autoComplete={creating ? 'new-password' : 'current-password'} secureTextEntry value={password} onChangeText={setPassword} maxLength={128} style={styles.input} onSubmitEditing={() => { if (!busy) void submit(); }} />
+    <TextInput accessibilityLabel="密码" autoCapitalize="none" autoComplete={creating ? 'new-password' : 'current-password'} secureTextEntry value={password} onChangeText={setPassword} maxLength={128} style={styles.input} onSubmitEditing={() => { void submit(); }} />
     {!!error && <Text accessibilityRole="alert" style={styles.error}>{error}</Text>}
-    <Pressable accessibilityRole="button" disabled={busy || !email.trim() || password.length < 12} onPress={submit} style={styles.button}>
+    <Pressable accessibilityRole="button" disabled={busy} onPress={submit}
+      style={({ pressed }) => [styles.button, pressed && !busy && styles.pressed, busy && styles.disabled]}>
       {busy ? <ActivityIndicator color="white" /> : <Text style={styles.buttonText}>{creating ? '注册并登录' : '登录'}</Text>}
     </Pressable>
-    <Pressable accessibilityRole="button" disabled={busy} onPress={() => { setCreating(!creating); setError(''); }}><Text style={styles.link}>{creating ? '已有账号？登录' : '没有账号？注册'}</Text></Pressable>
+    <Pressable accessibilityRole="button" disabled={busy} onPress={() => { setCreating(!creating); setError(''); }}
+      style={({ pressed }) => [styles.linkButton, pressed && !busy && styles.pressed, busy && styles.disabled]}>
+      <Text style={styles.link}>{creating ? '已有账号？登录' : '没有账号？注册'}</Text>
+    </Pressable>
   </ScrollView>;
 }
 
@@ -42,8 +56,11 @@ const styles = StyleSheet.create({
   copy: { color: colors.inkMuted, lineHeight: 22, marginBottom: 22 },
   label: { color: colors.ink, marginBottom: 8, fontWeight: '700' },
   input: { backgroundColor: colors.white, borderColor: colors.line, borderWidth: 1, borderRadius: 12, padding: 14, marginBottom: 18, color: colors.ink },
-  button: { backgroundColor: colors.orange, padding: 16, borderRadius: 12, marginTop: 8 },
+  button: { backgroundColor: colors.orange, padding: 16, borderRadius: 12, marginTop: 8, cursor: 'pointer' },
   buttonText: { color: colors.white, fontWeight: '800', textAlign: 'center' },
-  link: { color: colors.green, textAlign: 'center', padding: 20 },
+  linkButton: { padding: 20, cursor: 'pointer' },
+  link: { color: colors.green, textAlign: 'center' },
+  pressed: { opacity: 0.8 },
+  disabled: { cursor: 'auto', opacity: 0.6 },
   error: { color: '#A12626', marginBottom: 12 },
 });
