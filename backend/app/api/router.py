@@ -1,11 +1,12 @@
 from fastapi import APIRouter
 
-from app.api.routes import auth, corrections, events, meta, posters
+from app.api.routes import auth, corrections, events, meta, posters, knowledge
 from app.api.routes.admin import candidates as admin_candidates
 from app.api.routes.admin import corrections as admin_corrections
 from app.api.routes.admin import events as admin_events
 
 api_router = APIRouter()
+api_router.include_router(knowledge.router)
 api_router.include_router(posters.router)
 api_router.include_router(auth.router)
 api_router.include_router(admin_candidates.router)

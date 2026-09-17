@@ -206,7 +206,14 @@ export function MapScreen({ session, unreadIds, haloUntil, onVisibleEvents, poin
     });
     const observer = new ResizeObserver(() => view.invalidateSize());
     observer.observe(container.current); settled();
-    return () => { session.region = readRegion(); stopObservingPresses(); observer.disconnect(); cancelAnimationFrame(frame); view.remove(); };
+    return () => {
+      session.region = readRegion(); stopObservingPresses(); observer.disconnect();
+      view.off('move zoom', update).off('moveend', settled);
+      // Leaflet 1.9 keeps a CSS-zoom timeout after remove(). Disarm that callback
+      // before it can read panes already removed during account/debug switches.
+      (view as L.Map & {_animatingZoom:boolean})._animatingZoom = false;
+      view.stop(); cancelAnimationFrame(frame); view.remove();
+    };
   }, []);
   const recenter = () => {
     if (!position) { onLocate(); return; }

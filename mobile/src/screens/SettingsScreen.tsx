@@ -6,9 +6,11 @@ import { colors } from '../theme';
 import { RadiusSlider } from '../components/RadiusSlider';
 import Svg, { Circle } from 'react-native-svg';
 import { performanceHistory } from '../map/PerformanceMonitor';
+import type {User} from '../api/types';
+import {AccountProfile} from '../components/AccountProfile';
 
 const format = (time: number) => new Date(time + 8 * 3600000).toISOString().slice(0, 16).replace('T', ' ');
-export function SettingsScreen({ settings, onApply, onBack }: { settings: DebugSettings; onApply: (settings: DebugSettings, replay?: boolean) => Promise<void>; onBack: () => void }) {
+export function SettingsScreen({ settings, onApply, onBack,user,onUserChange,onLogout,onLogin }: { user:User|null;onUserChange:(user:User)=>void;onLogout:()=>Promise<void>;onLogin:()=>void;settings: DebugSettings; onApply: (settings: DebugSettings, replay?: boolean) => Promise<void>; onBack: () => void }) {
   const [enabled, setEnabled] = useState(settings.enabled);
   const [customTime, setCustomTime] = useState(Boolean(settings.time));
   const [time, setTime] = useState(() => format(appNow()));
@@ -30,6 +32,8 @@ export function SettingsScreen({ settings, onApply, onBack }: { settings: DebugS
   return <ScrollView contentContainerStyle={styles.page}>
     <Pressable accessibilityRole="button" accessibilityLabel="返回我的" onPress={onBack}><Text style={styles.body}>‹ 我的</Text></Pressable>
     <Text style={styles.title}>设置</Text>
+    <AccountProfile user={user} onUserChange={onUserChange} onLogout={onLogout} onLogin={onLogin}/>
+    {user?.role==='admin'&&<>
     <View style={styles.card}>
       <View style={styles.row}><Text style={styles.heading}>调试功能</Text>
         <Switch accessibilityLabel="开启调试功能" value={enabled} onValueChange={setEnabled} /></View>
@@ -74,6 +78,7 @@ export function SettingsScreen({ settings, onApply, onBack }: { settings: DebugS
     </View>}
     {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
     <Pressable accessibilityRole="button" disabled={busy} style={styles.apply} onPress={() => { void apply(); }}><Text style={styles.applyText}>{busy ? '应用中…' : '应用设置并返回地图'}</Text></Pressable>
+    </>}
   </ScrollView>;
 }
 const styles = StyleSheet.create({

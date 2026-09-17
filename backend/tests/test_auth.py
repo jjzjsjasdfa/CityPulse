@@ -52,6 +52,21 @@ def test_registration_roles_login_and_revocable_logout(auth_client):
     assert client.get("/api/v1/auth/me", headers=headers).status_code == 401
 
 
+def test_profile_is_account_owned_and_cannot_escalate_roles(auth_client):
+    client, _ = auth_client
+    credentials = {'email':'profile@example.com','password':'test-profile-password'}
+    client.post('/api/v1/auth/register',json=credentials)
+    headers={'Authorization':'Bearer '+client.post('/api/v1/auth/login',json=credentials).json()['access_token']}
+    assert client.put('/api/v1/auth/me',json={'nickname':'昵称','avatar':'leaf'}).status_code==401
+    assert client.put('/api/v1/auth/me',headers=headers,json={'nickname':'昵称','avatar':'leaf','role':'admin'}).status_code==422
+    response=client.put('/api/v1/auth/me',headers=headers,json={'nickname':'新的昵称','avatar':'music'})
+    assert response.status_code==200
+    assert response.json()['nickname']=='新的昵称' and response.json()['role']=='regular'
+    assert client.get('/api/v1/auth/me',headers=headers).json()['avatar']=='music'
+    assert client.get('/api/v1/auth/bindings').status_code==401
+    assert client.get('/api/v1/auth/bindings',headers=headers).json()['providers'][0]['available'] is False
+
+
 def test_expired_disabled_and_forged_sessions_are_denied(auth_client):
     client, session = auth_client
     credentials = {"email": "admin@example.com", "password": "a-long-test-password"}

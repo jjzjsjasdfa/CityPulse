@@ -18,7 +18,7 @@ from app.core.security import (
     verify_password,
 )
 from app.models import AuthSession, User
-from app.schemas import Credentials, LoginResponse, UserPublic
+from app.schemas import Credentials, LoginResponse, UserPublic, ProfileUpdate
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 _attempts: OrderedDict[str, list[float]] = OrderedDict()
@@ -75,6 +75,21 @@ def login(body: Credentials, session: SessionDep, response: Response) -> LoginRe
 @router.get("/me", response_model=UserPublic)
 def me(user: UserDep) -> User:
     return user
+
+
+@router.put('/me', response_model=UserPublic)
+def update_profile(body: ProfileUpdate, session: SessionDep, user: UserDep):
+    user.nickname, user.avatar = body.nickname, body.avatar
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+    return user
+
+
+@router.get('/bindings')
+def bindings(user: UserDep):
+    # Reserve provider discovery without accepting unverified external identities.
+    return {'providers': [{'id': 'wechat', 'name': '微信', 'available': False, 'bound': False}]}
 
 
 @router.post("/logout", status_code=204)

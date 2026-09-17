@@ -5,7 +5,7 @@ import { register, signIn } from '../api/client';
 import type { LoginResponse } from '../api/types';
 import { colors } from '../theme';
 
-export function LoginScreen({ onLogin }: { onLogin: (session: LoginResponse) => void }) {
+export function LoginScreen({ onLogin, onSkip }: { onLogin: (session: LoginResponse) => void; onSkip?:()=>void }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [creating, setCreating] = useState(false);
@@ -32,7 +32,7 @@ export function LoginScreen({ onLogin }: { onLogin: (session: LoginResponse) => 
   return <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
     <Text style={styles.brand}>CITYPULSE · 长沙</Text>
     <Text style={styles.title}>{creating ? '创建账号' : '欢迎回来'}</Text>
-    <Text style={styles.copy}>登录后发现已审核的城市活动，收藏你想去的地方。</Text>
+    <Text style={styles.copy}>无需登录也能浏览活动与地图。登录后可同步收藏、识别海报。</Text>
     <Text style={styles.label}>邮箱</Text>
     <TextInput accessibilityLabel="邮箱" autoCapitalize="none" autoComplete="email" keyboardType="email-address" value={email} onChangeText={setEmail} style={styles.input} />
     <Text style={styles.label}>密码（12–128 个字符）</Text>
@@ -46,6 +46,7 @@ export function LoginScreen({ onLogin }: { onLogin: (session: LoginResponse) => 
       style={({ pressed }) => [styles.linkButton, pressed && !busy && styles.pressed, busy && styles.disabled]}>
       <Text style={styles.link}>{creating ? '已有账号？登录' : '没有账号？注册'}</Text>
     </Pressable>
+    {onSkip&&<Pressable accessibilityRole="button" disabled={busy} onPress={onSkip} style={styles.linkButton}><Text style={styles.link}>暂不登录，随便看看</Text></Pressable>}
   </ScrollView>;
 }
 
