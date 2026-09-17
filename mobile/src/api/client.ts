@@ -22,9 +22,10 @@ function developmentHost() {
   }
   return emulatorHost;
 }
+export const realApiURL = () => process.env.EXPO_PUBLIC_API_URL ?? `http://${developmentHost()}:8000/api/v1`;
 export const apiURL = () => DEMO_MODE ? demoApiURL(process.env.EXPO_PUBLIC_DEMO_API_URL, Constants.expoConfig?.hostUri, Platform.OS,
   Platform.OS === 'web' && typeof window !== 'undefined' ? window.location.hostname : undefined) :
-  (process.env.EXPO_PUBLIC_API_URL ?? `http://${developmentHost()}:8000/api/v1`);
+  realApiURL();
 export const demoURL = (path: string) => `${apiURL()}${path}${path.includes('?') ? '&' : '?'}${demoQuery()}`;
 
 export class ApiError extends Error {
@@ -37,13 +38,15 @@ export class ApiError extends Error {
 }
 
 export async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(DEMO_MODE ? demoURL(path) : `${apiURL()}${path}`, {
+  const real = !DEMO_MODE || path.startsWith('/auth/');
+  if (DEMO_MODE && path.startsWith('/admin/')) throw new ApiError('调试已开启，暂无法审批。请关闭调试后继续。', 409);
+  const response = await fetch(real ? `${realApiURL()}${path}` : demoURL(path), {
     ...init,
-    headers: { 'Content-Type': 'application/json', ...(!DEMO_MODE && accessToken ? { Authorization: `Bearer ${accessToken}` } : {}), ...init?.headers },
+    headers: { 'Content-Type': 'application/json', ...(real && accessToken ? { Authorization: `Bearer ${accessToken}` } : {}), ...init?.headers },
   });
   if (!response.ok) {
     const payload = (await response.json().catch(() => ({}))) as ApiErrorEnvelope;
-    if (response.status === 401 && !DEMO_MODE && accessToken) {
+    if (response.status === 401 && real && accessToken) {
       clearSession();
       onUnauthorized?.();
     }

@@ -26,6 +26,15 @@ class UserPublic(BaseModel):
     id: UUID
     email: str
     role: UserRole
+    nickname: str = ''
+    avatar: str = 'person'
+    created_at: datetime
+
+
+class ProfileUpdate(BaseModel):
+    model_config = ConfigDict(extra='forbid', str_strip_whitespace=True)
+    nickname: str = Field(min_length=1, max_length=40)
+    avatar: Literal['person', 'leaf', 'music', 'sun', 'cat', 'planet'] = 'person'
 
 
 class LoginResponse(BaseModel):

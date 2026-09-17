@@ -11,7 +11,7 @@ export function AdminWorkspace({ userId, onChanged }: { userId: string; onChange
     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, padding: 12 }}>
       {(['candidates', 'events', 'corrections', 'posters'] as const).map((value) => <Pressable key={value} accessibilityRole="button" accessibilityState={{ selected: section === value }} onPress={() => setSection(value)}
         style={{ padding: 10, borderRadius: 8, backgroundColor: section === value ? colors.mint : colors.white }}>
-        <Text>{{ candidates: '候选审核', events: '活动管理', corrections: '纠错收件箱', posters: '海报与歌手资料' }[value]}</Text>
+        <Text>{{ candidates: '候选审核', events: '活动管理', corrections: '纠错收件箱', posters: '海报与词条' }[value]}</Text>
       </Pressable>)}
     </View>
     {section === 'posters' ? <PosterAdministration onChanged={onChanged}/> : section === 'candidates' ? <CandidateReviewScreen userId={userId} onPublished={onChanged} /> : <EventAdministrationScreen key={section} mode={section} userId={userId} onChanged={onChanged} />}

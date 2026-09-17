@@ -8,6 +8,8 @@ import { colors } from '../theme';
 import { PosterDiscovery } from '../components/PosterDiscovery';
 
 interface Props {
+  signedIn: boolean;
+  onLogin:()=>void;
   onSavePosterEvent: (id: string) => Promise<void>;
   onOpenPosterEvent: (id: string) => void;
   events: EventSummary[];
@@ -47,7 +49,7 @@ export function FeedScreen(props: Props) {
               <Text style={styles.title}>这座城，{`\n`}正在发生</Text>
             </View>
           </View>
-          <PosterDiscovery onSave={props.onSavePosterEvent} onOpen={props.onOpenPosterEvent} />
+          {props.signedIn?<PosterDiscovery onSave={props.onSavePosterEvent} onOpen={props.onOpenPosterEvent} />:<Pressable accessibilityRole="button" onPress={props.onLogin} style={{padding:20}}><Text style={{color:colors.green}}>登录后上传海报，了解活动资料 →</Text></Pressable>}
           {props.offline && (
             <View style={styles.offlineBanner}>
               <Text style={styles.offlineText}>活动数据暂不可用 · 连接服务后下拉刷新</Text>

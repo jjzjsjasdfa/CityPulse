@@ -25,12 +25,19 @@ def test_upload_permissions_duplicate_review_and_artist_link(review_client, monk
     response = client.post("/api/v1/posters", headers=user, json=body)
     assert response.status_code == 200, response.text
     row = response.json()
+    assert 'raw_text' not in row
+    assert '_pipeline' not in row['extracted']
+    assert row['warning'] == '识别内容可能不准确，请以官方公告为准。'
     assert row["artists"][0]["id"] == artist["id"]
     assert row["auto_save_id"] is None
     assert client.post("/api/v1/posters", headers=user, json=body).json()["id"] == row["id"]
     assert len(session.exec(select(PosterSubmission)).all()) == 1
     assert client.get(f"/api/v1/posters/{row['id']}", headers=admin).status_code == 404
     assert client.get(f"/api/v1/admin/posters/{row['id']}/image", headers=user).status_code == 403
+    assert client.get(f"/api/v1/admin/posters/{row['id']}", headers=user).status_code == 403
+    assert client.get(f"/api/v1/admin/posters/{row['id']}").status_code == 401
+    assert '测试音乐节' in client.get(f"/api/v1/admin/posters/{row['id']}", headers=admin).json()['raw_text']
+    assert 'raw_text' not in client.get(f"/api/v1/posters/{row['id']}", headers=user).json()
     event = {"name": "测试音乐节", "category": "festival", "summary": "测试", "description": "测试活动",
              "starts_at": "2027-10-16T12:00:00+08:00", "ends_at": "2027-10-16T22:00:00+08:00",
              "venue_name": "长沙公园", "address": "长沙公园", "city": "长沙", "district": "天心区",

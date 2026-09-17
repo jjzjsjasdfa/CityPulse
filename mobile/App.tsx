@@ -1,4 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import {allFavorites,saveFavorite} from './src/api/knowledge';
+import {KnowledgeProvider} from './src/components/Knowledge';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
@@ -30,13 +32,16 @@ const SETTINGS_KEY = '@citypulse/settings-v1';
 
 export default function App() {
   const [auth, setAuth] = useState<LoginResponse | null>(null);
-  useEffect(() => { setAuthHandler(() => setAuth(null)); }, []);
+  const [guest, setGuest] = useState(false);
+  const [startTab,setStartTab]=useState<Tab>('feed');
+  const endSession = () => { clearSession(); configureDebug({...DEFAULT_SETTINGS, enabled:false}); setSettings(current=>current?{...current,enabled:false}:current); setAuth(null); setGuest(true); };
+  useEffect(() => { setAuthHandler(endSession); }, []);
   useEffect(() => {
     if (!auth) return;
-    const timer = setTimeout(() => { clearSession(); setAuth(null); }, Math.max(0, Date.parse(auth.expires_at) - Date.now()));
+    const timer = setTimeout(() => { endSession(); }, Math.max(0, Date.parse(auth.expires_at) - Date.now()));
     return () => clearTimeout(timer);
   }, [auth]);
-  const logout = async () => { await signOut(); setAuth(null); };
+  const logout = async () => { await signOut(); endSession(); };
   const [settings, setSettings] = useState<DebugSettings | null>(null);
   const [revision, setRevision] = useState(0);
   useEffect(() => { void AsyncStorage.getItem(SETTINGS_KEY).then((value) => {
@@ -44,9 +49,10 @@ export default function App() {
     try { const saved = JSON.parse(value ?? 'null'); if (typeof saved?.enabled === 'boolean') next = { enabled: saved.enabled, time: typeof saved.time === 'string' && Number.isFinite(Date.parse(saved.time)) ? saved.time : null,
       radiusKm: Number.isFinite(saved.radiusKm) ? (saved.radiusKm === 15 && saved.cycleSeconds == null ? 7 : Math.max(0,Math.min(30,saved.radiusKm))) : 7, monitor: saved.monitor !== false,
       cycleSeconds: Number.isFinite(saved.cycleSeconds) ? Math.max(0.5, Math.min(5, saved.cycleSeconds)) : 1 }; } catch {}
-    configureDebug(next); setSettings(next);
-  }).catch(() => { configureDebug(DEFAULT_SETTINGS); setSettings(DEFAULT_SETTINGS); }); }, []);
+    next = {...next, enabled:false}; configureDebug(next); setSettings(next);
+  }).catch(() => { configureDebug({...DEFAULT_SETTINGS,enabled:false}); setSettings({...DEFAULT_SETTINGS,enabled:false}); }); }, []);
   const apply = async (next: DebugSettings, replay = false) => {
+    if(auth?.user.role!=='admin') return;
     await AsyncStorage.setItem(SETTINGS_KEY, JSON.stringify(next));
     // Unmount old subscriptions before switching clock, API and storage namespace.
     setSettings(null);
@@ -66,22 +72,24 @@ export default function App() {
     } } finally { setRevision((r) => r + 1); setSettings(next); }
   };
   if (!settings) return <View style={{ flex: 1, backgroundColor: colors.paper }} />;
-  return <SafeAreaProvider>
-    {!settings.enabled && !auth ? <LoginGate onLogin={setAuth} /> :
-      <CityPulse key={`${revision}/${settings.enabled ? 'demo' : auth?.user.id}`} initialTab={revision > 0 || settings.enabled ? 'map' : 'feed'} auth={auth} onLogout={logout} settings={settings} onApplySettings={apply} />}
-  </SafeAreaProvider>;
+  return <SafeAreaProvider><KnowledgeProvider key={`${revision}/${auth?.user.id||'guest'}`}>
+    {!guest && !auth ? <LoginGate onLogin={setAuth} onSkip={()=>setGuest(true)} /> :
+      <CityPulse key={`${revision}/${settings.enabled ? 'demo' : auth?.user.id}`} initialTab={revision > 0 || settings.enabled ? 'map' : startTab} auth={auth} onLogin={session=>{setStartTab('saved');setAuth(session)}} onUserChange={user=>setAuth(current=>current?{...current,user}:current)} onLogout={logout} settings={settings} onApplySettings={apply} />}
+  </KnowledgeProvider></SafeAreaProvider>;
 }
 
-function LoginGate({ onLogin }: { onLogin: (session: LoginResponse) => void }) {
+function LoginGate({ onLogin, onSkip }: { onLogin: (session: LoginResponse) => void; onSkip:()=>void }) {
   const insets = useSafeAreaInsets();
-  return <View style={[styles.safeArea, { paddingTop: insets.top, paddingBottom: insets.bottom }]}><StatusBar style="dark" /><LoginScreen onLogin={onLogin} /></View>;
+  return <View style={[styles.safeArea, { paddingTop: insets.top, paddingBottom: insets.bottom }]}><StatusBar style="dark" /><LoginScreen onLogin={onLogin} onSkip={onSkip} /></View>;
 }
 
-function CityPulse({ initialTab, auth, onLogout, settings, onApplySettings }: { initialTab: Tab; auth: LoginResponse | null; onLogout: () => Promise<void>; settings: DebugSettings; onApplySettings: (settings: DebugSettings, replay?: boolean) => Promise<void> }) {
+function CityPulse({ initialTab, auth, onLogin, onUserChange, onLogout, settings, onApplySettings }: { initialTab: Tab; auth: LoginResponse | null; onLogin:(session:LoginResponse)=>void; onUserChange:(user:LoginResponse['user'])=>void; onLogout: () => Promise<void>; settings: DebugSettings; onApplySettings: (settings: DebugSettings, replay?: boolean) => Promise<void> }) {
   const insets = useSafeAreaInsets();
-  const [SAVED_KEY] = useState(() => settings.enabled ? storageKey('saved-events') : `@citypulse/saved-events/${auth!.user.id}`);
-  const [SAVED_DATA_KEY] = useState(() => settings.enabled ? storageKey('saved-event-data') : `@citypulse/saved-event-data/${auth!.user.id}`);
+  const [SAVED_KEY] = useState(() => settings.enabled ? storageKey('saved-events') : `@citypulse/saved-events/${auth?.user.id||'guest'}`);
+  const [SAVED_DATA_KEY] = useState(() => settings.enabled ? storageKey('saved-event-data') : `@citypulse/saved-event-data/${auth?.user.id||'guest'}`);
   const [tab, setTab] = useState<Tab>(initialTab);
+  const [loginOpen,setLoginOpen]=useState(false);
+  const requireLogin=()=>{setDetail(null);setTab('saved');setLoginOpen(true);};
   const mapSession = useRef<MapSession>({ located: false });
   const [filter, setFilter] = useState<FilterValue>('all');
   const [error, setError] = useState('');
@@ -95,6 +103,7 @@ function CityPulse({ initialTab, auth, onLogout, settings, onApplySettings }: { 
   const [mapBounds, setMapBounds] = useState<MapBounds>(boundsFromRegion(INITIAL_REGION));
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
   const [savedReady, setSavedReady] = useState(false);
+  const savingFavorites = useRef(new Set<string>());
   const [detail, setDetail] = useState<EventDetail | null>(null);
   const [loading, setLoading] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -145,7 +154,10 @@ function CityPulse({ initialTab, auth, onLogout, settings, onApplySettings }: { 
   }, []);
 
   useEffect(() => {
+    if(!auth){setSavedReady(true);return;}
+    const controller = new AbortController();
     AsyncStorage.multiGet([SAVED_KEY, SAVED_DATA_KEY]).then(async (entries) => {
+      if(controller.signal.aborted)return;
       const values = new Map(entries);
       if (DEMO_MODE && values.get(SAVED_KEY) === null) {
         const response = await fetch(demoURL('/demo'));
@@ -159,6 +171,22 @@ function CityPulse({ initialTab, auth, onLogout, settings, onApplySettings }: { 
       }
       const ids: unknown = JSON.parse(values.get(SAVED_KEY) ?? '[]');
       if (Array.isArray(ids)) setSavedIds(new Set(ids.filter((id): id is string => typeof id === 'string')));
+      if (!DEMO_MODE) {
+        // One-time migration preserves this account's older local favorites.
+        const migrated = await AsyncStorage.getItem(`${SAVED_KEY}/server-v1`);
+        if (!migrated && Array.isArray(ids)) {
+          for (const id of ids) if (typeof id === 'string') {
+            if(controller.signal.aborted)return;
+            try { await saveFavorite(id,true,controller.signal); } catch (e) {
+              if (!(e instanceof Error && /404|不存在/.test(e.message))) throw e;
+            }
+          }
+        }
+        const serverIds = await allFavorites(controller.signal);
+        if(controller.signal.aborted)return;
+        setSavedIds(new Set(serverIds));
+        await AsyncStorage.setItem(`${SAVED_KEY}/server-v1`, '1');
+      }
       const cached: unknown = JSON.parse(values.get(SAVED_DATA_KEY) ?? '[]');
       if (Array.isArray(cached)) setKnownEvents((current) => {
         const merged = new Map(current.map((event) => [event.id, event]));
@@ -166,11 +194,12 @@ function CityPulse({ initialTab, auth, onLogout, settings, onApplySettings }: { 
           .forEach((event: EventSummary) => merged.set(event.id, event));
         return [...merged.values()];
       });
-    }).catch(() => undefined).finally(() => setSavedReady(true));
+    }).catch(() => {if(!controller.signal.aborted)setError('收藏同步失败，当前显示本机缓存。请检查网络后重新登录重试。')}).finally(() => {if(!controller.signal.aborted)setSavedReady(true)});
+    return()=>controller.abort();
   }, []);
 
   useEffect(() => {
-    if (!savedReady) return;
+    if (!savedReady || !auth) return;
     void AsyncStorage.multiSet([
       [SAVED_KEY, JSON.stringify([...savedIds])],
       [SAVED_DATA_KEY, JSON.stringify(knownEvents.filter((event) => savedIds.has(event.id)))],
@@ -178,7 +207,7 @@ function CityPulse({ initialTab, auth, onLogout, settings, onApplySettings }: { 
   }, [savedReady, savedIds, knownEvents]);
 
   useEffect(() => {
-    if (!savedReady) return;
+    if (!savedReady || !auth) return;
     const controller = new AbortController();
     const missing = [...savedIds].filter((id) => !knownEvents.some((event) => event.id === id));
     // Older installs only persisted IDs. Restore their coordinates with bounded concurrency.
@@ -237,13 +266,21 @@ function CityPulse({ initialTab, auth, onLogout, settings, onApplySettings }: { 
   };
 
   const toggleSaved = (id: string) => {
-    setSavedIds((current) => {
-      const next = new Set(current);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+    if(!auth){requireLogin();return;}
+    if (!savedReady || savingFavorites.current.has(id)) return;
+    const save = !savedIds.has(id);
+    savingFavorites.current.add(id);
+    void (DEMO_MODE ? Promise.resolve() : saveFavorite(id, save)).then(() => {
+      setSavedIds(current => {const next=new Set(current);if(save)next.add(id);else next.delete(id);return next});
+    }).catch(() => Alert.alert('收藏未更新', '无法连接服务，请稍后重试。')).finally(() => savingFavorites.current.delete(id));
   };
+
+  useEffect(() => {
+    if(!auth||tab!=='saved'||DEMO_MODE||!savedReady||savingFavorites.current.size)return;
+    let active=true;
+    void allFavorites().then(ids=>{if(active&&!savingFavorites.current.size)setSavedIds(new Set(ids))}).catch(()=>undefined);
+    return()=>{active=false};
+  },[tab,savedReady]);
 
   const openSummary = async (event: EventSummary) => {
     setDetail(null);
@@ -282,7 +319,7 @@ function CityPulse({ initialTab, auth, onLogout, settings, onApplySettings }: { 
       { id: 'feed' as const, icon: '⌁', label: '发现' },
       { id: 'map' as const, icon: '⌖', label: '地图' },
       { id: 'saved' as const, icon: '♙', label: '我的' },
-      ...(!settings.enabled && auth?.user.role === 'admin' ? [{ id: 'admin' as const, icon: '✓', label: '审核' }] : []),
+      ...(auth?.user.role === 'admin' ? [{ id: 'admin' as const, icon: '✓', label: '审核' }] : []),
     ],
     [auth?.user.role, settings.enabled],
   );
@@ -291,20 +328,18 @@ function CityPulse({ initialTab, auth, onLogout, settings, onApplySettings }: { 
   return (
     <View style={styles.safeArea}>
       <StatusBar style="dark" />
-      {!settings.enabled && auth && <View style={[styles.accountBar, { paddingTop: Math.max(12, insets.top) }]}>
-        <Text style={styles.accountText}>{auth.user.email} · {auth.user.role === 'admin' ? '管理员' : '普通用户'}</Text>
-        <Pressable accessibilityRole="button" onPress={() => { void onLogout().catch(() => setError('退出失败，请检查网络后重试。')); }}><Text style={{ color: colors.green }}>退出</Text></Pressable>
-      </View>}
       {!!error && <Pressable onPress={() => setError('')}><Text accessibilityRole="alert" style={{ color: '#A12626', padding: 12 }}>{error}</Text></Pressable>}
-      <View style={[styles.content, tab !== 'map' && { paddingTop: settings.enabled ? insets.top : 0, paddingBottom: 90 + insets.bottom }]}>
-        {tab === 'admin' && !settings.enabled && auth?.user.role === 'admin' && <AdminWorkspace userId={auth.user.id} onChanged={() => { void load(filter, query, when); }} />}
-        {tab === 'settings' && <SettingsScreen settings={settings} onApply={onApplySettings} onBack={() => setTab('saved')} />}
+      <View style={[styles.content, tab !== 'map' && { paddingTop: insets.top, paddingBottom: 90 + insets.bottom }]}>
+        {tab === 'admin' && auth?.user.role === 'admin' && (settings.enabled ? <View style={{padding:24,gap:16}}><Text style={{fontSize:24,fontWeight:'700'}}>审批</Text><Text>调试已开启，暂无法审批。正式审批数据保留，关闭调试后可继续处理。</Text><Pressable accessibilityRole="button" onPress={()=>setTab('settings')}><Text>前往设置关闭调试</Text></Pressable></View> : <AdminWorkspace userId={auth.user.id} onChanged={() => { void load(filter, query, when); }} />)}
+        {tab === 'settings' && <SettingsScreen user={auth?.user??null} onUserChange={onUserChange} onLogout={onLogout} onLogin={requireLogin} settings={settings} onApply={onApplySettings} onBack={() => setTab('saved')} />}
         {tab === 'feed' && (
           <FeedScreen
+            signedIn={Boolean(auth)} onLogin={requireLogin}
             onOpenPosterEvent={openId}
             onSavePosterEvent={async (id) => {
               if (!savedReady) throw new Error('收藏尚未加载，请稍后重试');
               const event = await getEvent(id);
+              await saveFavorite(id);
               setKnownEvents(current => [...current.filter(item => item.id !== id), event]);
               setSavedIds(current => new Set([...current, id]));
             }}
@@ -340,8 +375,8 @@ function CityPulse({ initialTab, auth, onLogout, settings, onApplySettings }: { 
             onDemoPublished={nearby.refresh}
           />
         )}
-        {tab === 'saved' && (
-          <SavedScreen
+        {tab === 'saved' && (loginOpen&&!auth ? <LoginScreen onLogin={onLogin} onSkip={()=>setLoginOpen(false)}/> :
+          <SavedScreen user={auth?.user??null} onLogin={()=>setLoginOpen(true)} debug={settings.enabled}
             onSettings={() => setTab('settings')}
             events={knownEvents}
             savedIds={savedIds}
@@ -378,9 +413,10 @@ function CityPulse({ initialTab, auth, onLogout, settings, onApplySettings }: { 
         saved={detail ? savedIds.has(detail.id) : false}
         onClose={() => setDetail(null)}
         onToggleSaved={() => detail && toggleSaved(detail.id)}
-        onSubmitCorrection={(message) =>
-          detail ? submitCorrection({ event_id: detail.id, kind: 'other', message }) : Promise.resolve()
-        }
+        onSubmitCorrection={async(message) => {
+          if(!auth){requireLogin();throw new Error('请登录后提交纠错');}
+          if(detail)await submitCorrection({ event_id: detail.id, kind: 'other', message });
+        }}
       />
       {settings.enabled && settings.monitor && <PerformanceMonitor visible={tab === 'map'} />}
     </View>

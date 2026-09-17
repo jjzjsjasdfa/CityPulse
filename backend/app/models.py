@@ -13,6 +13,47 @@ def utc_now() -> datetime:
     return datetime.now(UTC)
 
 
+class Entry(SQLModel, table=True):
+    __tablename__ = "entries"
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    kind: str = Field(index=True, max_length=24)
+    name: str = Field(max_length=200, index=True)
+    profile: dict = Field(default_factory=dict, sa_column=Column(JSON, nullable=False))
+    version: int = 1
+
+
+class EntryName(SQLModel, table=True):
+    __tablename__ = "entry_names"
+    entry_id: UUID = Field(foreign_key="entries.id", ondelete="CASCADE", primary_key=True)
+    name: str = Field(primary_key=True, max_length=200, index=True)
+
+
+class EventEntry(SQLModel, table=True):
+    __tablename__ = "event_entries"
+    event_id: UUID = Field(foreign_key="events.id", ondelete="CASCADE", primary_key=True)
+    entry_id: UUID = Field(foreign_key="entries.id", primary_key=True)
+    role: str = Field(primary_key=True, max_length=24)
+
+
+class KnowledgeRevision(SQLModel, table=True):
+    __tablename__ = "knowledge_revisions"
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    entry_id: UUID = Field(foreign_key="entries.id", index=True)
+    reviewer_id: UUID = Field(foreign_key="users.id")
+    poster_id: UUID | None = Field(default=None, foreign_key="poster_submissions.id")
+    before: dict = Field(default_factory=dict, sa_column=Column(JSON, nullable=False))
+    after: dict = Field(default_factory=dict, sa_column=Column(JSON, nullable=False))
+    note: str = Field(max_length=1000)
+    created_at: datetime = Field(default_factory=utc_now, sa_type=DateTime(timezone=True))
+
+
+class Favorite(SQLModel, table=True):
+    __tablename__ = "favorites"
+    user_id: UUID = Field(foreign_key="users.id", ondelete="CASCADE", primary_key=True)
+    event_id: UUID = Field(foreign_key="events.id", ondelete="CASCADE", primary_key=True)
+    created_at: datetime = Field(default_factory=utc_now, sa_type=DateTime(timezone=True))
+
+
 class EventCategory(StrEnum):
     performance = "performance"
     sports = "sports"
@@ -98,6 +139,8 @@ class User(SQLModel, table=True):
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     email: str = Field(max_length=320, unique=True, index=True)
     password_hash: str = Field(max_length=256)
+    nickname: str = Field(default='', max_length=40)
+    avatar: str = Field(default='person', max_length=20)
     role: UserRole = Field(default=UserRole.regular, sa_column=Column(String(16), nullable=False))
     is_active: bool = True
     created_at: datetime = Field(default_factory=utc_now, sa_type=DateTime(timezone=True))

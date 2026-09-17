@@ -3,8 +3,11 @@ import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import type { EventSummary } from '../api/types';
 import { EventCard } from '../components/EventCard';
 import { colors } from '../theme';
+import type {User} from '../api/types';
+import {Avatar,nickname} from '../components/AccountProfile';
 
 interface Props {
+  user:User|null; onLogin:()=>void; debug:boolean;
   events: EventSummary[];
   savedIds: Set<string>;
   onSelect: (event: EventSummary) => void;
@@ -12,7 +15,7 @@ interface Props {
   onSettings: () => void;
 }
 
-export function SavedScreen({ events, savedIds, onSelect, onToggleSaved, onSettings }: Props) {
+export function SavedScreen({ events, savedIds, onSelect, onToggleSaved, onSettings, user, onLogin, debug }: Props) {
   const saved = events.filter((event) => savedIds.has(event.id));
   return (
     <FlatList
@@ -21,10 +24,10 @@ export function SavedScreen({ events, savedIds, onSelect, onToggleSaved, onSetti
       contentContainerStyle={styles.content}
       ListHeaderComponent={
         <View style={styles.header}>
-          <View style={{flexDirection:'row',alignItems:'center',justifyContent:'space-between'}}><Text style={styles.title}>我的</Text>
+          <View style={{flexDirection:'row',alignItems:'center',justifyContent:'space-between'}}><View style={{flexDirection:'row',alignItems:'center',gap:14}}><Avatar value={user?.avatar}/><View><Text style={{fontSize:24,fontWeight:'800',color:colors.ink}}>{user?nickname(user):'欢迎来逛逛'}</Text>{!user&&<Pressable accessibilityRole="button" onPress={onLogin}><Text style={{color:colors.green,paddingVertical:8}}>登录 / 注册</Text></Pressable>}</View></View>
             <Pressable accessibilityRole="button" accessibilityLabel="设置" onPress={onSettings} style={{padding:12}}><Text style={{fontSize:25,color:colors.ink}}>⚙</Text></Pressable></View>
           <Text style={{fontSize:20,fontWeight:'700',color:colors.ink,marginTop:22}}>我的收藏</Text>
-          <Text style={styles.subtitle}>收藏只保存在这台设备上，你可以随时取消。</Text>
+          <Text style={styles.subtitle}>{!user?'登录后可收藏活动，并在不同设备上同步。':debug?'调试收藏 · 与账号的正式收藏分开保存。':`已收藏 ${savedIds.size} 个活动 · 随账号同步`}</Text>
         </View>
       }
       ListEmptyComponent={
