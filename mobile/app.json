@@ -12,6 +12,10 @@
       "isIosBackgroundLocationEnabled": false,
       "isAndroidBackgroundLocationEnabled": false,
       "isAndroidForegroundServiceEnabled": false
+    }], ["expo-image-picker", {
+      "photosPermission": "选择活动海报，用于识别阵容和活动信息。",
+      "cameraPermission": false,
+      "microphonePermission": false
     }]],
     "ios": {
       "supportsTablet": true,

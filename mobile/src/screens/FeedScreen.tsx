@@ -5,8 +5,11 @@ import type { EventSummary } from '../api/types';
 import { EventCard } from '../components/EventCard';
 import { FilterBar, type FilterValue } from '../components/FilterBar';
 import { colors } from '../theme';
+import { PosterDiscovery } from '../components/PosterDiscovery';
 
 interface Props {
+  onSavePosterEvent: (id: string) => Promise<void>;
+  onOpenPosterEvent: (id: string) => void;
   events: EventSummary[];
   query: string;
   when: 'any' | 'today' | 'weekend';
@@ -44,6 +47,7 @@ export function FeedScreen(props: Props) {
               <Text style={styles.title}>这座城，{`\n`}正在发生</Text>
             </View>
           </View>
+          <PosterDiscovery onSave={props.onSavePosterEvent} onOpen={props.onOpenPosterEvent} />
           {props.offline && (
             <View style={styles.offlineBanner}>
               <Text style={styles.offlineText}>活动数据暂不可用 · 连接服务后下拉刷新</Text>

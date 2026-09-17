@@ -4,7 +4,7 @@ from typing import Any
 from uuid import UUID, uuid4
 
 from geoalchemy2 import Geography
-from sqlalchemy import JSON, Column, DateTime, String, Text, UniqueConstraint
+from sqlalchemy import JSON, Column, DateTime, LargeBinary, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import Field, SQLModel
 
@@ -61,6 +61,35 @@ class CandidateReviewStatus(StrEnum):
 class UserRole(StrEnum):
     regular = "regular"
     admin = "admin"
+
+
+class Artist(SQLModel, table=True):
+    __tablename__ = "artists"
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    name: str = Field(max_length=100, index=True)
+    profile: dict = Field(default_factory=dict, sa_column=Column(JSON, nullable=False))
+
+
+class PosterSubmission(SQLModel, table=True):
+    __tablename__ = "poster_submissions"
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    user_id: UUID = Field(foreign_key="users.id", index=True)
+    image: bytes = Field(sa_column=Column(LargeBinary, nullable=False))
+    image_hash: str = Field(max_length=64, index=True)
+    raw_text: str = Field(sa_column=Column(Text, nullable=False))
+    extracted: dict = Field(sa_column=Column(JSON, nullable=False))
+    status: str = Field(default="pending", max_length=20, index=True)
+    event_id: UUID | None = Field(default=None, foreign_key="events.id")
+    reviewed_by: UUID | None = Field(default=None, foreign_key="users.id")
+    review_note: str | None = Field(default=None, max_length=1000)
+    created_at: datetime = Field(default_factory=utc_now, sa_type=DateTime(timezone=True))
+
+
+class EventBackground(SQLModel, table=True):
+    __tablename__ = "event_backgrounds"
+    event_id: UUID = Field(primary_key=True, foreign_key="events.id", ondelete="CASCADE")
+    artist_ids: list = Field(default_factory=list, sa_column=Column(JSON, nullable=False))
+    references: list = Field(default_factory=list, sa_column=Column(JSON, nullable=False))
 
 
 class User(SQLModel, table=True):

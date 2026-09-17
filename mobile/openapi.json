@@ -6,6 +6,426 @@
     "version": "0.1.0"
   },
   "paths": {
+    "/api/v1/artists": {
+      "get": {
+        "tags": [
+          "poster-discovery"
+        ],
+        "summary": "Artists",
+        "operationId": "artists_api_v1_artists_get",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Q"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/artists": {
+      "post": {
+        "tags": [
+          "poster-discovery"
+        ],
+        "summary": "Create Artist",
+        "operationId": "create_artist_api_v1_admin_artists_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ArtistInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/artists/{artist_id}": {
+      "put": {
+        "tags": [
+          "poster-discovery"
+        ],
+        "summary": "Update Artist",
+        "operationId": "update_artist_api_v1_admin_artists__artist_id__put",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "artist_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Artist Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ArtistInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/posters": {
+      "get": {
+        "tags": [
+          "poster-discovery"
+        ],
+        "summary": "History",
+        "operationId": "history_api_v1_posters_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "poster-discovery"
+        ],
+        "summary": "Upload",
+        "operationId": "upload_api_v1_posters_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Upload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/posters/{poster_id}": {
+      "get": {
+        "tags": [
+          "poster-discovery"
+        ],
+        "summary": "Get Poster",
+        "operationId": "get_poster_api_v1_posters__poster_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "poster_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Poster Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/posters": {
+      "get": {
+        "tags": [
+          "poster-discovery"
+        ],
+        "summary": "Queue",
+        "operationId": "queue_api_v1_admin_posters_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/posters/{poster_id}/image": {
+      "get": {
+        "tags": [
+          "poster-discovery"
+        ],
+        "summary": "Poster Image",
+        "operationId": "poster_image_api_v1_admin_posters__poster_id__image_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "poster_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Poster Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/posters/{poster_id}/review": {
+      "post": {
+        "tags": [
+          "poster-discovery"
+        ],
+        "summary": "Review",
+        "operationId": "review_api_v1_admin_posters__poster_id__review_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "poster_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Poster Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Review"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/events/{event_id}/background": {
+      "get": {
+        "tags": [
+          "poster-discovery"
+        ],
+        "summary": "Background",
+        "operationId": "background_api_v1_events__event_id__background_get",
+        "parameters": [
+          {
+            "name": "event_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Event Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/auth/register": {
       "post": {
         "tags": [
@@ -1828,14 +2248,14 @@
           },
           "latitude": {
             "type": "number",
-            "maximum": 90.0,
-            "minimum": -90.0,
+            "maximum": 90,
+            "minimum": -90,
             "title": "Latitude"
           },
           "longitude": {
             "type": "number",
-            "maximum": 180.0,
-            "minimum": -180.0,
+            "maximum": 180,
+            "minimum": -180,
             "title": "Longitude"
           },
           "organizer": {
@@ -2020,14 +2440,14 @@
           },
           "latitude": {
             "type": "number",
-            "maximum": 90.0,
-            "minimum": -90.0,
+            "maximum": 90,
+            "minimum": -90,
             "title": "Latitude"
           },
           "longitude": {
             "type": "number",
-            "maximum": 180.0,
-            "minimum": -180.0,
+            "maximum": 180,
+            "minimum": -180,
             "title": "Longitude"
           },
           "organizer": {
@@ -2098,6 +2518,93 @@
         ],
         "title": "AdminEventUpdate"
       },
+      "ArtistInput": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "birth_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Birth Date"
+          },
+          "gender": {
+            "type": "string",
+            "maxLength": 40,
+            "title": "Gender",
+            "default": ""
+          },
+          "hometown": {
+            "type": "string",
+            "maxLength": 100,
+            "title": "Hometown",
+            "default": ""
+          },
+          "aliases": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 30,
+            "title": "Aliases"
+          },
+          "fan_name": {
+            "type": "string",
+            "maxLength": 100,
+            "title": "Fan Name",
+            "default": ""
+          },
+          "support_color": {
+            "type": "string",
+            "maxLength": 100,
+            "title": "Support Color",
+            "default": ""
+          },
+          "agency": {
+            "type": "string",
+            "maxLength": 200,
+            "title": "Agency",
+            "default": ""
+          },
+          "honors": {
+            "type": "string",
+            "maxLength": 3000,
+            "title": "Honors",
+            "default": ""
+          },
+          "works": {
+            "items": {
+              "$ref": "#/components/schemas/Work"
+            },
+            "type": "array",
+            "maxItems": 100,
+            "title": "Works"
+          },
+          "references": {
+            "items": {
+              "$ref": "#/components/schemas/Reference"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "References"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "ArtistInput"
+      },
       "CandidateApproval": {
         "properties": {
           "name": {
@@ -2157,14 +2664,14 @@
           },
           "latitude": {
             "type": "number",
-            "maximum": 90.0,
-            "minimum": -90.0,
+            "maximum": 90,
+            "minimum": -90,
             "title": "Latitude"
           },
           "longitude": {
             "type": "number",
-            "maximum": 180.0,
-            "minimum": -180.0,
+            "maximum": 180,
+            "minimum": -180,
             "title": "Longitude"
           },
           "organizer": {
@@ -2763,6 +3270,125 @@
         ],
         "title": "EventDetailResponse"
       },
+      "EventFields": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "category": {
+            "$ref": "#/components/schemas/EventCategory"
+          },
+          "summary": {
+            "type": "string",
+            "maxLength": 360,
+            "minLength": 1,
+            "title": "Summary"
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 10000,
+            "minLength": 1,
+            "title": "Description"
+          },
+          "starts_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Starts At"
+          },
+          "ends_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Ends At"
+          },
+          "venue_name": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Venue Name"
+          },
+          "address": {
+            "type": "string",
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Address"
+          },
+          "city": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "City"
+          },
+          "district": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "District"
+          },
+          "latitude": {
+            "type": "number",
+            "maximum": 90,
+            "minimum": -90,
+            "title": "Latitude"
+          },
+          "longitude": {
+            "type": "number",
+            "maximum": 180,
+            "minimum": -180,
+            "title": "Longitude"
+          },
+          "organizer": {
+            "type": "string",
+            "maxLength": 180,
+            "minLength": 1,
+            "title": "Organizer"
+          },
+          "price": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 80
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price"
+          },
+          "status": {
+            "$ref": "#/components/schemas/EventStatus"
+          },
+          "evidence_url": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "format": "uri",
+            "title": "Evidence Url"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name",
+          "category",
+          "summary",
+          "description",
+          "starts_at",
+          "ends_at",
+          "venue_name",
+          "address",
+          "city",
+          "district",
+          "latitude",
+          "longitude",
+          "organizer",
+          "status",
+          "evidence_url"
+        ],
+        "title": "EventFields"
+      },
       "EventPage": {
         "properties": {
           "data": {
@@ -3287,6 +3913,88 @@
         ],
         "title": "PlaceMatch"
       },
+      "Reference": {
+        "properties": {
+          "label": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Label"
+          },
+          "url": {
+            "type": "string",
+            "maxLength": 2083,
+            "minLength": 1,
+            "format": "uri",
+            "title": "Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "label",
+          "url"
+        ],
+        "title": "Reference"
+      },
+      "Review": {
+        "properties": {
+          "approve": {
+            "type": "boolean",
+            "title": "Approve"
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Note"
+          },
+          "event_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Event Id"
+          },
+          "new_event": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EventFields"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "artist_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "maxItems": 60,
+            "title": "Artist Ids"
+          },
+          "references": {
+            "items": {
+              "$ref": "#/components/schemas/Reference"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "References"
+          }
+        },
+        "type": "object",
+        "required": [
+          "approve",
+          "note"
+        ],
+        "title": "Review"
+      },
       "SourceCoordinates": {
         "properties": {
           "longitude": {
@@ -3413,6 +4121,20 @@
         ],
         "title": "StatusHistoryPublic"
       },
+      "Upload": {
+        "properties": {
+          "image_base64": {
+            "type": "string",
+            "maxLength": 11200000,
+            "title": "Image Base64"
+          }
+        },
+        "type": "object",
+        "required": [
+          "image_base64"
+        ],
+        "title": "Upload"
+      },
       "UserPublic": {
         "properties": {
           "id": {
@@ -3483,6 +4205,39 @@
           "type"
         ],
         "title": "ValidationError"
+      },
+      "Work": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "language": {
+            "type": "string",
+            "maxLength": 60,
+            "title": "Language",
+            "default": ""
+          },
+          "category": {
+            "type": "string",
+            "maxLength": 60,
+            "title": "Category",
+            "default": ""
+          },
+          "released": {
+            "type": "string",
+            "maxLength": 40,
+            "title": "Released",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "Work"
       }
     },
     "securitySchemes": {

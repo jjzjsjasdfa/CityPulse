@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { EventArtistBackground } from './ArtistInfo';
 import {
   ActivityIndicator,
   Alert,
@@ -125,6 +126,7 @@ export function DetailSheet({ event, loading, saved, onClose, onToggleSaved, onS
           </View>
           <Text style={styles.sectionTitle}>活动说明</Text>
           <Text style={styles.description}>{event.description}</Text>
+          <EventArtistBackground id={event.id} />
           <View style={styles.tags}>
             {event.attributes.map((attribute) => (
               <Text key={attribute} style={styles.tag}>{attribute}</Text>
