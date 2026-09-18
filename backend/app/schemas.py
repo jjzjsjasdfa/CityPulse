@@ -33,8 +33,18 @@ class UserPublic(BaseModel):
 
 class ProfileUpdate(BaseModel):
     model_config = ConfigDict(extra='forbid', str_strip_whitespace=True)
-    nickname: str = Field(min_length=1, max_length=40)
     avatar: Literal['person', 'leaf', 'music', 'sun', 'cat', 'planet'] = 'person'
+
+
+class NicknameChangeInput(BaseModel):
+    model_config = ConfigDict(extra='forbid', str_strip_whitespace=True)
+    nickname: str = Field(min_length=1, max_length=40)
+
+
+class NicknameChangeReview(BaseModel):
+    model_config = ConfigDict(extra='forbid', str_strip_whitespace=True)
+    approve: bool
+    note: str = Field(min_length=1, max_length=500)
 
 
 class LoginResponse(BaseModel):

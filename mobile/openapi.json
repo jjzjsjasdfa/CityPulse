@@ -1145,6 +1145,72 @@
         ]
       }
     },
+    "/api/v1/auth/nickname-change": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Nickname Change",
+        "operationId": "nickname_change_api_v1_auth_nickname_change_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Request Nickname Change",
+        "operationId": "request_nickname_change_api_v1_auth_nickname_change_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NicknameChangeInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/auth/bindings": {
       "get": {
         "tags": [
@@ -1871,6 +1937,108 @@
                 "schema": {
                   "$ref": "#/components/schemas/AdminCorrection"
                 }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/nickname-changes": {
+      "get": {
+        "tags": [
+          "admin-profiles"
+        ],
+        "summary": "Queue",
+        "operationId": "queue_api_v1_admin_nickname_changes_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "pending",
+              "title": "Status"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/nickname-changes/{change_id}/review": {
+      "post": {
+        "tags": [
+          "admin-profiles"
+        ],
+        "summary": "Review",
+        "operationId": "review_api_v1_admin_nickname_changes__change_id__review_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "change_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Change Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NicknameChangeReview"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
               }
             }
           },
@@ -4667,6 +4835,43 @@
         ],
         "title": "NearbyEventsResponse"
       },
+      "NicknameChangeInput": {
+        "properties": {
+          "nickname": {
+            "type": "string",
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Nickname"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "nickname"
+        ],
+        "title": "NicknameChangeInput"
+      },
+      "NicknameChangeReview": {
+        "properties": {
+          "approve": {
+            "type": "boolean",
+            "title": "Approve"
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Note"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "approve",
+          "note"
+        ],
+        "title": "NicknameChangeReview"
+      },
       "PageMeta": {
         "properties": {
           "page": {
@@ -4744,12 +4949,6 @@
       },
       "ProfileUpdate": {
         "properties": {
-          "nickname": {
-            "type": "string",
-            "maxLength": 40,
-            "minLength": 1,
-            "title": "Nickname"
-          },
           "avatar": {
             "type": "string",
             "enum": [
@@ -4766,9 +4965,6 @@
         },
         "additionalProperties": false,
         "type": "object",
-        "required": [
-          "nickname"
-        ],
         "title": "ProfileUpdate"
       },
       "Reference": {
