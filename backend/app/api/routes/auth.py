@@ -17,8 +17,8 @@ from app.core.security import (
     token_hash,
     verify_password,
 )
-from app.models import AuthSession, User
-from app.schemas import Credentials, LoginResponse, UserPublic, ProfileUpdate
+from app.models import AuthSession, NicknameChange, User
+from app.schemas import Credentials, LoginResponse, UserPublic, ProfileUpdate, NicknameChangeInput
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 _attempts: OrderedDict[str, list[float]] = OrderedDict()
@@ -79,11 +79,43 @@ def me(user: UserDep) -> User:
 
 @router.put('/me', response_model=UserPublic)
 def update_profile(body: ProfileUpdate, session: SessionDep, user: UserDep):
-    user.nickname, user.avatar = body.nickname, body.avatar
+    user.avatar = body.avatar
     session.add(user)
     session.commit()
     session.refresh(user)
     return user
+
+
+def public_nickname_change(row):
+    return {'id': row.id, 'current_nickname': row.current_nickname,
+            'proposed_nickname': row.proposed_nickname, 'status': row.status,
+            'review_note': row.review_note, 'created_at': row.created_at,
+            'reviewed_at': row.reviewed_at}
+
+
+@router.get('/nickname-change')
+def nickname_change(session: SessionDep, user: UserDep):
+    row = session.exec(select(NicknameChange).where(
+        NicknameChange.user_id == user.id).order_by(NicknameChange.created_at.desc())).first()
+    return public_nickname_change(row) if row else None
+
+
+@router.post('/nickname-change')
+def request_nickname_change(body: NicknameChangeInput, session: SessionDep, user: UserDep):
+    if body.nickname == user.nickname:
+        raise HTTPException(409, '新昵称与当前昵称相同')
+    row = session.exec(select(NicknameChange).where(
+        NicknameChange.user_id == user.id, NicknameChange.status == 'pending').with_for_update()).first()
+    if row:
+        row.current_nickname, row.proposed_nickname = user.nickname, body.nickname
+        row.created_at = datetime.now(UTC)
+    else:
+        row = NicknameChange(user_id=user.id, current_nickname=user.nickname,
+                             proposed_nickname=body.nickname)
+    session.add(row)
+    session.commit()
+    session.refresh(row)
+    return public_nickname_change(row)
 
 
 @router.get('/bindings')

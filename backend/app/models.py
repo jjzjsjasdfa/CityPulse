@@ -146,6 +146,20 @@ class User(SQLModel, table=True):
     created_at: datetime = Field(default_factory=utc_now, sa_type=DateTime(timezone=True))
 
 
+class NicknameChange(SQLModel, table=True):
+    __tablename__ = "nickname_changes"
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    user_id: UUID = Field(foreign_key="users.id", ondelete="CASCADE", index=True)
+    current_nickname: str = Field(default="", max_length=40)
+    proposed_nickname: str = Field(max_length=40)
+    status: str = Field(default="pending", max_length=16, index=True)
+    review_note: str = Field(default="", max_length=500)
+    reviewed_by: UUID | None = Field(default=None, foreign_key="users.id")
+    created_at: datetime = Field(default_factory=utc_now, sa_type=DateTime(timezone=True))
+    reviewed_at: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))
+
+
 class AuthSession(SQLModel, table=True):
     __tablename__ = "auth_sessions"
 
