@@ -12,6 +12,16 @@ export function AccountProfile({user,onUserChange,onLogout,onLogin}:{user:User|n
  const [name,setName]=useState(user?nickname(user):''),[avatar,setAvatar]=useState(user?.avatar||'person'),[notice,setNotice]=useState(''),[busy,setBusy]=useState(false);
  const [confirming,setConfirming]=useState(false),[change,setChange]=useState<{proposed_nickname:string;status:string;review_note?:string}|null>(null);
  const [providers,setProviders]=useState<{id:string;name:string;available:boolean;bound:boolean}[]>([]);
+ const [deviceConfirm,setDeviceConfirm]=useState(false),[devicePassword,setDevicePassword]=useState(''),[deviceBusy,setDeviceBusy]=useState(false),[deviceNotice,setDeviceNotice]=useState('');
+ const logoutOthers=async()=>{
+  if(deviceBusy||!devicePassword)return;
+  setDeviceBusy(true);setDeviceNotice('');
+  try{
+   const result=await request<{revoked_count:number}>('/auth/logout-others',{method:'POST',body:JSON.stringify({password:devicePassword})});
+   setDeviceConfirm(false);setDeviceNotice(result.revoked_count?'其他地方的登录已退出，当前设备保持登录。':'没有其他登录会话，当前设备保持登录。');
+  }catch(e){setDeviceNotice(e instanceof Error?e.message:'操作失败，请重试');}
+  finally{setDevicePassword('');setDeviceBusy(false);}
+ };
  useEffect(()=>{let active=true;if(user)void Promise.all([request<{providers:typeof providers}>('/auth/bindings'),request<typeof change>('/auth/nickname-change')]).then(([p,c])=>{if(active){setProviders(p.providers);setChange(c)}}).catch(()=>{if(active)setNotice('账号状态暂时无法加载')});return()=>{active=false}},[user?.id]);
  const save=async(submitNickname=false)=>{setBusy(true);setNotice('');try{
    const updated=await request<User>('/auth/me',{method:'PUT',body:JSON.stringify({avatar})});onUserChange(updated);
@@ -26,6 +36,14 @@ export function AccountProfile({user,onUserChange,onLogout,onLogin}:{user:User|n
   {confirming&&<View accessibilityRole="alert" style={{padding:14,borderRadius:12,backgroundColor:colors.paper,gap:10}}><Text style={{fontWeight:'700'}}>确认提交昵称审核？</Text><Text style={{color:colors.inkMuted}}>昵称会在管理员审核通过后生效；审核期间仍显示当前昵称“{user.nickname||nickname(user)}”。再次提交会更新待审昵称。</Text><View style={{flexDirection:'row',gap:20}}><Pressable accessibilityRole="button" onPress={()=>setConfirming(false)}><Text>取消</Text></Pressable><Pressable accessibilityRole="button" onPress={()=>void save(true)}><Text style={{color:colors.green}}>提交审核</Text></Pressable></View></View>}
   <Pressable accessibilityRole="button" disabled={busy||!name.trim()} onPress={()=>void save()}><Text style={{color:colors.green}}>保存账号资料</Text></Pressable>
   <Text style={{fontWeight:'700'}}>账号绑定与快捷登录</Text>{providers.map(p=><View key={p.id}><Text>{p.name} · {p.available?(p.bound?'已绑定':'未绑定'):'暂未开放'}</Text></View>)}<Text style={{color:colors.inkMuted}}>微信等平台接入后，可在此绑定并使用快捷登录。</Text>
-  <Pressable accessibilityRole="button" disabled={busy} onPress={()=>{setBusy(true);void onLogout().catch(()=>{setNotice('退出失败，请重试');setBusy(false)})}}><Text style={{color:colors.red}}>退出登录</Text></Pressable>
+  <Pressable accessibilityRole="button" disabled={busy||deviceBusy} onPress={()=>{setDeviceConfirm(true);setDevicePassword('');setDeviceNotice('')}}><Text style={{color:colors.red}}>退出其他设备</Text></Pressable>
+  {deviceConfirm&&<View style={{padding:14,borderRadius:12,backgroundColor:colors.paper,gap:12}}>
+   <Text style={{fontWeight:'700'}}>确认退出其他地方的登录？</Text>
+   <Text>手机、网页等其他登录会话将失效，当前设备保持登录。请输入当前账号密码确认。</Text>
+   <TextInput accessibilityLabel="退出其他设备确认密码" secureTextEntry autoCapitalize="none" autoCorrect={false} autoComplete="off" maxLength={128} editable={!deviceBusy} value={devicePassword} onChangeText={setDevicePassword} placeholder="输入当前账号密码" style={{borderWidth:1,borderColor:colors.line,padding:12,borderRadius:8}}/>
+   <View style={{flexDirection:'row',gap:24}}><Pressable accessibilityRole="button" disabled={deviceBusy} onPress={()=>{setDeviceConfirm(false);setDevicePassword('');setDeviceNotice('')}}><Text>取消</Text></Pressable><Pressable accessibilityRole="button" disabled={deviceBusy||!devicePassword} onPress={()=>void logoutOthers()}><Text style={{color:colors.red}}>{deviceBusy?'正在处理…':'确认退出其他设备'}</Text></Pressable></View>
+  </View>}
+  {!!deviceNotice&&<Text accessibilityRole="alert">{deviceNotice}</Text>}
+  <Pressable accessibilityRole="button" disabled={busy||deviceBusy} onPress={()=>{setBusy(true);void onLogout().catch(()=>{setNotice('退出失败，请重试');setBusy(false)})}}><Text style={{color:colors.red}}>退出登录</Text></Pressable>
  </>:<><Text>当前为游客，可自由浏览地图和活动。</Text><Pressable accessibilityRole="button" onPress={onLogin}><Text style={{color:colors.green}}>前往我的登录</Text></Pressable></>}{!!notice&&<Text accessibilityRole="alert">{notice}</Text>}</View>
 }

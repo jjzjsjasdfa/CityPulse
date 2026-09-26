@@ -18,14 +18,17 @@ interface Props {
 }
 
 export function SavedScreen({ events, savedIds, onSelect, onToggleSaved, onSettings, user, onLogin, debug }: Props) {
+  const [availableWidth,setAvailableWidth]=useState(0);
   const saved = events.filter((event) => savedIds.has(event.id));
   const viewKey=`@citypulse/favorite-view/${user?.id||'guest'}`;
   const [view,setView]=useState<'cards'|'list'>('cards');
+  const columns=view==='list'?1:availableWidth>=1100?3:availableWidth>=700?2:1;
   useEffect(()=>{let active=true;void AsyncStorage.getItem(viewKey).then(value=>{if(active&&(value==='cards'||value==='list'))setView(value)});return()=>{active=false}},[viewKey]);
   const choose=(next:'cards'|'list')=>{setView(next);void AsyncStorage.setItem(viewKey,next)};
   return (
-    <FlatList
-      key={view}
+    <View style={{flex:1}} onLayout={e=>setAvailableWidth(e.nativeEvent.layout.width)}><FlatList
+      key={`${view}-${columns}`}
+      numColumns={columns}
       data={saved}
       keyExtractor={(item) => item.id}
       contentContainerStyle={styles.content}
@@ -46,15 +49,17 @@ export function SavedScreen({ events, savedIds, onSelect, onToggleSaved, onSetti
         </View>
       }
       renderItem={({ item }) => view==='cards' ? (
+        <View style={{width:`${100/columns}%`,paddingHorizontal:columns>1?8:0}}>
         <EventCard
           event={item}
           saved
           onPress={() => onSelect(item)}
           onToggleSaved={() => onToggleSaved(item.id)}
         />
+        </View>
       ) : <View style={styles.listItem}><Pressable accessibilityRole="button" accessibilityLabel={`查看${item.name}`} onPress={()=>onSelect(item)} style={styles.listMain}><View style={[styles.dot,{backgroundColor:categoryColors[item.category]}]}/><View style={{flex:1}}><Text numberOfLines={1} style={styles.listTitle}>{item.name}</Text><Text numberOfLines={1} style={styles.subtitle}>{categoryLabels[item.category]} · {formatDate(item.starts_at)} · {item.location.venue_name}</Text></View></Pressable><Pressable accessibilityRole="button" accessibilityLabel="取消收藏" onPress={()=>onToggleSaved(item.id)} style={{padding:12}}><Text style={{fontSize:22,color:colors.orange}}>♥</Text></Pressable></View>}
       ListFooterComponent={<View style={{ height: 100 }} />}
-    />
+    /></View>
   );
 }
 

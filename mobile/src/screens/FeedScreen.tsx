@@ -32,10 +32,14 @@ interface Props {
 }
 
 export function FeedScreen(props: Props) {
+  const [availableWidth,setAvailableWidth] = useState(0);
+  const columns = availableWidth >= 1100 ? 3 : availableWidth >= 700 ? 2 : 1;
   const [search, setSearch] = useState(props.query);
   useEffect(() => setSearch(props.query), [props.query]);
   return (
-    <FlatList
+    <View style={{flex:1}} onLayout={e=>setAvailableWidth(e.nativeEvent.layout.width)}><FlatList
+      key={columns}
+      numColumns={columns}
       testID="event-feed"
       data={props.events}
       keyExtractor={(item) => item.id}
@@ -86,18 +90,20 @@ export function FeedScreen(props: Props) {
         )
       }
       renderItem={({ item }) => (
+        <View style={{width:`${100/columns}%`,paddingHorizontal:columns>1?8:0}}>
         <EventCard
           event={item}
           saved={props.savedIds.has(item.id)}
           onPress={() => props.onSelect(item)}
           onToggleSaved={() => props.onToggleSaved(item.id)}
         />
+        </View>
       )}
       ListFooterComponent={<View style={styles.footerSpace}>
         {!!props.moreError && <Text accessibilityRole="alert" style={styles.offlineText}>{props.moreError}</Text>}
         {props.hasMore && <Pressable accessibilityRole="button" disabled={props.loading} onPress={props.onLoadMore}><Text style={styles.pastLink}>{props.loading ? '正在加载…' : '加载更多'}</Text></Pressable>}
       </View>}
-    />
+    /></View>
   );
 }
 

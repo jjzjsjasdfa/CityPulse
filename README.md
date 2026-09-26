@@ -32,8 +32,14 @@ computer's LAN address followed by `:8000/api/v1`.
 
 - Email/password authentication uses scrypt password hashing and random, revocable
   bearer sessions. Only token hashes are stored in the database. Sessions expire
-  after 12 hours; logout revokes the current session immediately.
-- Session tokens stay in app memory. Restarting/reloading the app requires login.
+  after 180 days without renewal; logout revokes the current device session immediately.
+- Sessions survive app restarts and browser reloads and renew automatically on startup,
+  foregrounding and every six hours while open. Regular use keeps the user signed in.
+  Native apps store credentials in SecureStore; web uses origin-scoped localStorage.
+  No passwords are stored. Startup validates and renews the session with `/auth/session`.
+  Temporary connectivity failures preserve credentials and offer retry or guest browsing.
+  Logout and HTTP 401 clear persisted credentials. Debug mode still starts disabled.
+  The last successfully used email is retained for the login form; the password field starts empty.
   Bookmarks persist on the device separately for each account.
 - Registration always creates `regular` users. Administrators are provisioned with
   the CLI. Every review API request checks the current database role and activity.
@@ -140,3 +146,6 @@ Set `POSTGRES_PORT=5433` in your untracked `.env` if port 5432 is already occupi
 
 See [PaddleOCR setup and collaboration](docs/PADDLE_OCR.md) and
 [poster submission and review workflow](docs/POSTER_DISCOVERY.md).
+
+See [RapidFuzz matching and React-admin integration](docs/OPEN_SOURCE_INTEGRATIONS.md)
+for the current scope, installation, and regression checks.

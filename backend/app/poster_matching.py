@@ -1,8 +1,8 @@
 """Conservative database reconciliation; original OCR evidence remains unchanged."""
 from copy import deepcopy
-from difflib import SequenceMatcher
 from sqlalchemy import and_, func, or_
 from sqlmodel import select
+from app.fuzzy import name_similarity
 from app.models import Entry, EntryName
 from app.poster_service import normalized
 
@@ -27,7 +27,7 @@ def reconcile(session, facts):
             .order_by(func.similarity(EntryName.name, key).desc(), Entry.id).limit(40)).all()
         ranked = {}
         for entry, alias in rows:
-            score = SequenceMatcher(None, key, alias).ratio()
+            score = name_similarity(key, alias)
             if score > ranked.get(entry.id, (0, None))[0]:
                 ranked[entry.id] = (score, entry)
         candidates = sorted(ranked.values(), key=lambda item: item[0], reverse=True)

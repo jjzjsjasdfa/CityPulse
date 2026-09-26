@@ -6,11 +6,11 @@ import shutil
 import subprocess
 import tempfile
 import unicodedata
-from difflib import SequenceMatcher
 from pathlib import Path
 
 from fastapi import HTTPException
 from PIL import Image, ImageOps, UnidentifiedImageError
+from app.fuzzy import name_similarity
 from app.poster_layout import text_rows, dates_and_scenes, choose_title
 
 Image.MAX_IMAGE_PIXELS = 16_000_000
@@ -232,10 +232,10 @@ def match_score(facts: dict, event) -> tuple[float, bool]:
     candidate = normalized(event.name)
     venue = normalized(event.venue_name)
     specific_place = normalized((facts.get('place') or '').split(' · ')[-1])
-    venue_score = SequenceMatcher(None, specific_place, venue).ratio()
+    venue_score = name_similarity(specific_place, venue)
     location_match = len(place) >= 2 and (place in normalized(event.city + event.address + event.venue_name)
                                           or (len(venue) >= 2 and venue in place) or (len(venue) >= 5 and venue_score >= .8))
-    name_score = SequenceMatcher(None, name, candidate).ratio()
+    name_score = name_similarity(name, candidate)
     score = name_score if location_match else 0
     # Only an exact event title plus its specific venue qualifies for automatic saving.
     from zoneinfo import ZoneInfo

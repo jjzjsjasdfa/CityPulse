@@ -3,10 +3,11 @@ import {allFavorites,saveFavorite} from './src/api/knowledge';
 import {KnowledgeProvider} from './src/components/Knowledge';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { AccessibilityInfo, Alert, Animated, AppState, Linking, PanResponder, Platform, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { layoutForWidth } from './src/layout';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { clearSession, demoURL, getEvent, listEvents, setAuthHandler, signOut, submitCorrection } from './src/api/client';
+import { clearSession, demoURL, getEvent, listEvents, renewSession, restoreSession, setAuthHandler, signOut, submitCorrection } from './src/api/client';
 import { configureDebug, DEFAULT_SETTINGS, DEMO_MODE, storageKey, type DebugSettings } from './src/demo';
 import { SettingsScreen } from './src/screens/SettingsScreen';
 import { useActivityAlerts } from './src/map/useActivityAlerts';
@@ -32,15 +33,33 @@ const SETTINGS_KEY = '@citypulse/settings-v1';
 
 export default function App() {
   const [auth, setAuth] = useState<LoginResponse | null>(null);
+  const [authReady, setAuthReady] = useState(false);
+  const [restoreError, setRestoreError] = useState(false);
+  const restore = async () => {
+    setRestoreError(false);
+    try { setAuth(await restoreSession()); setAuthReady(true); }
+    catch { setRestoreError(true); }
+  };
+  useEffect(() => { void restore(); }, []);
   const [guest, setGuest] = useState(false);
   const [startTab,setStartTab]=useState<Tab>('feed');
   const endSession = () => { clearSession(); configureDebug({...DEFAULT_SETTINGS, enabled:false}); setSettings(current=>current?{...current,enabled:false}:current); setAuth(null); setGuest(true); };
   useEffect(() => { setAuthHandler(endSession); }, []);
   useEffect(() => {
     if (!auth) return;
-    const timer = setTimeout(() => { endSession(); }, Math.max(0, Date.parse(auth.expires_at) - Date.now()));
-    return () => clearTimeout(timer);
-  }, [auth]);
+    let active = true;
+    let pending = false;
+    const renew = async () => {
+      if (pending) return;
+      pending = true;
+      try { const session = await renewSession(); if (active && session) setAuth(session); }
+      catch { /* Network failure retains the session; 401 is handled centrally. */ }
+      finally { pending = false; }
+    };
+    const timer = setInterval(() => { void renew(); }, 6 * 60 * 60 * 1000);
+    const subscription = AppState.addEventListener('change', state => { if (state === 'active') void renew(); });
+    return () => { active = false; clearInterval(timer); subscription.remove(); };
+  }, [auth?.access_token]);
   const logout = async () => { await signOut(); endSession(); };
   const [settings, setSettings] = useState<DebugSettings | null>(null);
   const [revision, setRevision] = useState(0);
@@ -71,7 +90,10 @@ export default function App() {
       }
     } } finally { setRevision((r) => r + 1); setSettings(next); }
   };
-  if (!settings) return <View style={{ flex: 1, backgroundColor: colors.paper }} />;
+  if (!settings || !authReady) return <View style={{ flex: 1, backgroundColor: colors.paper, justifyContent:'center', alignItems:'center', gap:16 }}>
+    <Text>{restoreError ? '暂时无法连接账号服务，登录信息已保留。' : '正在恢复登录状态…'}</Text>
+    {restoreError && <><Pressable accessibilityRole="button" onPress={()=>void restore()}><Text>重试</Text></Pressable><Pressable accessibilityRole="button" onPress={()=>{setGuest(true);setAuthReady(true);}}><Text>暂不登录，随便看看</Text></Pressable></>}
+  </View>;
   return <SafeAreaProvider><KnowledgeProvider key={`${revision}/${auth?.user.id||'guest'}`}>
     {!guest && !auth ? <LoginGate onLogin={setAuth} onSkip={()=>setGuest(true)} /> :
       <CityPulse key={`${revision}/${settings.enabled ? 'demo' : auth?.user.id}`} initialTab={revision > 0 || settings.enabled ? 'map' : startTab} auth={auth} onLogin={session=>{setStartTab('saved');setAuth(session)}} onUserChange={user=>setAuth(current=>current?{...current,user}:current)} onLogout={logout} settings={settings} onApplySettings={apply} />}
@@ -84,6 +106,18 @@ function LoginGate({ onLogin, onSkip }: { onLogin: (session: LoginResponse) => v
 }
 
 function CityPulse({ initialTab, auth, onLogin, onUserChange, onLogout, settings, onApplySettings }: { initialTab: Tab; auth: LoginResponse | null; onLogin:(session:LoginResponse)=>void; onUserChange:(user:LoginResponse['user'])=>void; onLogout: () => Promise<void>; settings: DebugSettings; onApplySettings: (settings: DebugSettings, replay?: boolean) => Promise<void> }) {
+  const layout = layoutForWidth(useWindowDimensions().width);
+  const wide = layout.mode !== 'phone';
+  const verticalNav = layout.mode === 'desktop';
+  const [navPreview,setNavPreview] = useState<number|null>(null);
+  const navSize = useRef({width:300,height:240});
+  const [navMeasured,setNavMeasured]=useState({width:300,height:240});
+  const navPosition=useRef(new Animated.Value(0)).current;
+  const pageOpacity=useRef(new Animated.Value(1)).current;
+  const [reduceMotion,setReduceMotion]=useState(false);
+  useEffect(()=>{void AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion);const listener=AccessibilityInfo.addEventListener('reduceMotionChanged',setReduceMotion);return()=>listener.remove();},[]);
+  const navStart = useRef(0);
+  const suppressNavClick = useRef(0);
   const insets = useSafeAreaInsets();
   const [SAVED_KEY] = useState(() => settings.enabled ? storageKey('saved-events') : `@citypulse/saved-events/${auth?.user.id||'guest'}`);
   const [SAVED_DATA_KEY] = useState(() => settings.enabled ? storageKey('saved-event-data') : `@citypulse/saved-event-data/${auth?.user.id||'guest'}`);
@@ -317,7 +351,7 @@ function CityPulse({ initialTab, auth, onLogin, onUserChange, onLogout, settings
   const tabs = useMemo(
     () => [
       { id: 'feed' as const, icon: '⌁', label: '发现' },
-      { id: 'map' as const, icon: '⌖', label: '地图' },
+      { id: 'map' as const, icon: '⌖', label: '探索' },
       { id: 'saved' as const, icon: '♙', label: '我的' },
       ...(auth?.user.role === 'admin' ? [{ id: 'admin' as const, icon: '✓', label: '审核' }] : []),
     ],
@@ -325,11 +359,43 @@ function CityPulse({ initialTab, auth, onLogin, onUserChange, onLogout, settings
   );
 
 
+  const selectTab = (index:number) => {
+    const item=tabs[index];if(!item)return;
+    setTab(item.id);if(item.id==='feed')void load(filter,query,when);
+  };
+  const navLatest = useRef({index:0,select:selectTab});
+  navLatest.current={index:Math.max(0,tabs.findIndex(item=>item.id===tab||(tab==='settings'&&item.id==='saved'))),select:selectTab};
+  const settleNav=(index:number)=>{
+    navPosition.stopAnimation();
+    if(reduceMotion){navPosition.setValue(index);return;}
+    Animated.spring(navPosition,{toValue:index,damping:24,stiffness:260,mass:0.8,overshootClamping:true,useNativeDriver:true}).start();
+  };
+  useEffect(()=>{settleNav(navLatest.current.index);},[tab,verticalNav,reduceMotion]);
+  useEffect(()=>{
+    pageOpacity.setValue(reduceMotion?1:0.65);
+    const animation=Animated.timing(pageOpacity,{toValue:1,duration:160,useNativeDriver:true});animation.start();
+    return()=>animation.stop();
+  },[tab,reduceMotion]);
+  // Vertical items have fixed height; do not derive their pitch from a stale
+  // measurement left over from the horizontal layout or an admin session.
+  const navPitch=verticalNav?68:(navMeasured.width-10)/tabs.length;
+  const navTranslation=useMemo(()=>navPosition.interpolate({inputRange:[0,tabs.length-1],outputRange:[0,navPitch*(tabs.length-1)],extrapolate:'clamp'}),[navPosition,navPitch,tabs.length]);
+  const navGesture = useMemo(()=>{
+    const position=(dx:number,dy:number)=>Math.max(0,Math.min(tabs.length-1,navStart.current+(verticalNav?dy:dx)/(verticalNav?68:(navSize.current.width-10)/tabs.length)));
+    return PanResponder.create({
+      onMoveShouldSetPanResponderCapture:(_,g)=>Math.abs(verticalNav?g.dy:g.dx)>8&&Math.abs(verticalNav?g.dy:g.dx)>Math.abs(verticalNav?g.dx:g.dy),
+      onPanResponderGrant:()=>{navStart.current=navLatest.current.index;navPosition.stopAnimation();setNavPreview(navStart.current);},
+      onPanResponderMove:(_,g)=>{const value=position(g.dx,g.dy);navPosition.setValue(value);setNavPreview(Math.round(value));},
+      onPanResponderRelease:(_,g)=>{const index=Math.round(position(g.dx,g.dy));suppressNavClick.current=Date.now()+350;setNavPreview(null);settleNav(index);navLatest.current.select(index);},
+      onPanResponderTerminate:()=>{suppressNavClick.current=Date.now()+350;setNavPreview(null);settleNav(navLatest.current.index);},
+    });
+  },[verticalNav,tabs.length,reduceMotion]);
+
   return (
     <View style={styles.safeArea}>
       <StatusBar style="dark" />
       {!!error && <Pressable onPress={() => setError('')}><Text accessibilityRole="alert" style={{ color: '#A12626', padding: 12 }}>{error}</Text></Pressable>}
-      <View style={[styles.content, tab !== 'map' && { paddingTop: insets.top, paddingBottom: 90 + insets.bottom }]}>
+      <Animated.View testID={`layout-${layout.mode}`} style={[styles.content, {opacity:pageOpacity}, {marginLeft:tab==='map'?0:layout.rail, marginRight:wide && detail ? layout.detail : 0}, tab !== 'map' && { paddingTop: insets.top, paddingBottom: verticalNav ? insets.bottom : 90 + insets.bottom }]}>
         {tab === 'admin' && auth?.user.role === 'admin' && (settings.enabled ? <View style={{padding:24,gap:16}}><Text style={{fontSize:24,fontWeight:'700'}}>审批</Text><Text>调试已开启，暂无法审批。正式审批数据保留，关闭调试后可继续处理。</Text><Pressable accessibilityRole="button" onPress={()=>setTab('settings')}><Text>前往设置关闭调试</Text></Pressable></View> : <AdminWorkspace userId={auth.user.id} onChanged={() => { void load(filter, query, when); }} />)}
         {tab === 'settings' && <SettingsScreen user={auth?.user??null} onUserChange={onUserChange} onLogout={onLogout} onLogin={requireLogin} settings={settings} onApply={onApplySettings} onBack={() => setTab('saved')} />}
         {tab === 'feed' && (
@@ -384,17 +450,18 @@ function CityPulse({ initialTab, auth, onLogin, onUserChange, onLogout, settings
             onToggleSaved={toggleSaved}
           />
         )}
-      </View>
-      <View style={[styles.tabBar, { bottom: Math.max(12, insets.bottom + 6) }]}>
-        {tabs.map((item) => {
-          const active = tab === item.id || (tab === 'settings' && item.id === 'saved');
+      </Animated.View>
+      <View testID="page-navigation" {...navGesture.panHandlers} onLayout={e=>{navSize.current=e.nativeEvent.layout;setNavMeasured(e.nativeEvent.layout);}} style={verticalNav ? [styles.sideBar,{top:insets.top+12}] : [styles.tabBar,layout.mode==='tablet'&&{left:16,right:undefined,width:Math.min(360,tabs.length*84+24)}, { bottom: Math.max(12, insets.bottom + 6) }]}>
+        <Animated.View testID="navigation-highlight" pointerEvents="none" style={{position:'absolute',left:6,top:6,width:verticalNav?66:navPitch-4,height:verticalNav?64:50,borderRadius:25,backgroundColor:colors.mint,transform:verticalNav?[{translateY:navTranslation}]:[{translateX:navTranslation}]}} />
+        {tabs.map((item,index) => {
+          const active = navPreview===null ? tab === item.id || (tab === 'settings' && item.id === 'saved') : navPreview===index;
           return (
             <Pressable
               accessibilityRole="button"
               accessibilityState={{ selected: active }}
               key={item.id}
-              onPress={() => { setTab(item.id); if (item.id === 'feed') void load(filter, query, when); }}
-              style={({ pressed }) => [styles.tab, pressed && { opacity: 0.7 }]}
+              onPress={() => { if(Date.now()>=suppressNavClick.current)selectTab(index); }}
+              style={({ pressed }) => [verticalNav ? styles.sideTab : styles.tab, pressed && { opacity: 0.7 }]}
             >
               <Svg width={24} height={24} viewBox="0 0 24 24" stroke={active ? colors.orange : '#7B8C89'} strokeWidth={1.8} fill="none" strokeLinecap="round" strokeLinejoin="round">
                 {item.id === 'saved' ? <><Circle cx={12} cy={7} r={4}/><Path d="M4 22v-3a8 8 0 0 1 16 0v3"/></> : item.id === 'map' ?
@@ -406,7 +473,9 @@ function CityPulse({ initialTab, auth, onLogin, onUserChange, onLogout, settings
           );
         })}
       </View>
+      <View pointerEvents={wide && detail ? 'auto' : 'box-none'} style={wide ? {position:'absolute',right:0,top:insets.top,bottom:insets.bottom,width:detail?layout.detail:0,borderLeftWidth:detail?1:0,borderColor:colors.line} : undefined}>
       <DetailSheet
+        presentation={wide ? 'panel' : 'modal'}
         key={detail?.id ?? 'closed'}
         event={detail}
         loading={detailLoading}
@@ -418,6 +487,7 @@ function CityPulse({ initialTab, auth, onLogin, onUserChange, onLogout, settings
           if(detail)await submitCorrection({ event_id: detail.id, kind: 'other', message });
         }}
       />
+      </View>
       {settings.enabled && settings.monitor && <PerformanceMonitor visible={tab === 'map'} />}
     </View>
   );
@@ -426,16 +496,19 @@ function CityPulse({ initialTab, auth, onLogin, onUserChange, onLogout, settings
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: colors.paper },
   content: { flex: 1 },
+  sideBar: {overflow:'hidden',...(Platform.OS==='web'?{touchAction:'none' as const}:{}),position:'absolute',left:12,width:80,maxWidth:80,backgroundColor:'rgba(255,255,255,0.94)',borderWidth:1,borderColor:colors.line,padding:6,gap:4,borderRadius:32,shadowColor:'#183A35',shadowOpacity:0.14,shadowRadius:14,shadowOffset:{width:0,height:4},elevation:8},
+  sideTab: {height:64,alignItems:'center',justifyContent:'center',gap:4,borderRadius:25},
   accountBar: { flexDirection: 'row', padding: 12, gap: 12, borderBottomWidth: 1, borderColor: colors.line },
   accountText: { flex: 1, color: colors.inkMuted, fontSize: 12 },
   tabBar: {
+    ...(Platform.OS==='web'?{touchAction:'none' as const}:{}),
     position: 'absolute', left: 24, right: 24, height: 64,
     backgroundColor: 'rgba(255,255,255,0.94)', borderRadius: 32,
     borderColor: 'rgba(220,229,225,0.7)', borderWidth: 1,
     shadowColor: '#183A35', shadowOpacity: 0.14, shadowRadius: 18, shadowOffset: { width: 0, height: 6 }, elevation: 8,
     flexDirection: 'row',
-    paddingHorizontal: 18,
-    paddingBottom: 5,
+    padding: 6,
+    gap: 4,
   },
   tab: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   tabIcon: { color: '#7B8C89', fontSize: 25, lineHeight: 27 },
