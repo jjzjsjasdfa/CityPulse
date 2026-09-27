@@ -82,7 +82,7 @@ export function SettingsScreen({ settings, onApply, onBack,user,onUserChange,onL
   </ScrollView>;
 }
 const styles = StyleSheet.create({
-  page: { padding: 22, gap: 18, backgroundColor: colors.paper, flexGrow: 1 }, title: { fontSize: 28, fontWeight: '800', color: colors.ink },
+  page: { padding: 22, gap: 18, backgroundColor: colors.paper, flexGrow: 1, width:'100%',maxWidth:840,alignSelf:'center' }, title: { fontSize: 28, fontWeight: '800', color: colors.ink },
   card: { padding: 18, borderRadius: 18, backgroundColor: colors.white, gap: 14 }, row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   heading: { fontSize: 16, fontWeight: '700', color: colors.ink }, body: { fontSize: 13, lineHeight: 21, color: colors.inkMuted },
   input: { borderWidth: 1, borderColor: colors.line, borderRadius: 10, padding: 13, fontSize: 16, color: colors.ink },

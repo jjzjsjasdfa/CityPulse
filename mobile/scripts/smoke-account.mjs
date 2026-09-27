@@ -21,13 +21,20 @@ try{
  await page.addInitScript(()=>localStorage.setItem('@citypulse/settings-v1',JSON.stringify({enabled:true,radiusKm:7,monitor:false,cycleSeconds:1,time:null})));
  await page.goto('http://localhost:8081/');
  await page.getByRole('button',{name:'暂不登录，随便看看'}).click();
- await page.getByRole('button',{name:'地图',exact:true}).click();
+ await page.getByRole('button',{name:'探索',exact:true}).click();
  await page.getByRole('button',{name:'我的',exact:true}).click();
  await page.getByRole('button',{name:'设置',exact:true}).click();
  if(await page.getByLabel('开启调试功能').count())throw Error('Guest debug control exposed');
  await page.getByRole('button',{name:'前往我的登录'}).click();
  const login=async(a)=>{await page.getByLabel('邮箱',{exact:true}).fill(a.email);await page.getByLabel('密码',{exact:true}).fill(a.password);await page.getByRole('button',{name:'登录',exact:true}).click();await page.getByLabel('邮箱',{exact:true}).waitFor({state:'hidden'});await page.getByRole('button',{name:'我的',exact:true}).click()};
- await login(accounts[0]);await page.getByRole('button',{name:'设置',exact:true}).click();
+ await login(accounts[0]);
+ await page.reload();await page.getByRole('button',{name:'我的',exact:true}).click();
+ if(await page.getByRole('button',{name:'登录 / 注册'}).count())throw Error('Session lost on reload');
+ await page.route('**/api/v1/auth/session',route=>route.abort());await page.reload();
+ await page.getByText('暂时无法连接账号服务，登录信息已保留。',{exact:true}).waitFor();
+ await page.unroute('**/api/v1/auth/session');await page.getByRole('button',{name:'重试',exact:true}).click();
+ await page.getByRole('button',{name:'我的',exact:true}).click();
+ await page.getByRole('button',{name:'设置',exact:true}).click();
  if(await page.getByLabel('开启调试功能').count())throw Error('Regular debug control exposed');
  await page.getByLabel('用户昵称').fill('城市漫游者');await page.getByRole('button',{name:'头像 leaf'}).click();await page.getByRole('button',{name:'保存账号资料'}).click();
  await page.getByText('确认提交昵称审核？',{exact:true}).waitFor();await page.getByRole('button',{name:'提交审核',exact:true}).click();
@@ -36,7 +43,7 @@ try{
  await page.getByRole('button',{name:'设置',exact:true}).click();await page.getByRole('button',{name:'退出登录',exact:true}).click();
  await page.getByRole('button',{name:'我的',exact:true}).click();await page.getByRole('button',{name:'登录 / 注册'}).click();await login(accounts[1]);
  await page.getByRole('button',{name:'审核',exact:true}).click();await page.getByRole('button',{name:'昵称审核',exact:true}).click();
- await page.getByRole('button',{name:/未设置昵称 → 城市漫游者/}).click();await page.getByLabel('昵称审核说明').fill('测试昵称合规');await page.getByRole('button',{name:'通过昵称',exact:true}).click();await page.getByText('昵称已通过并生效',{exact:true}).waitFor();
+ await page.getByRole('button',{name:'审核 城市漫游者',exact:true}).click();await page.getByLabel('昵称审核说明').fill('测试昵称合规');await page.getByRole('button',{name:'提交审核决定',exact:true}).click();await page.getByText('昵称已通过并生效',{exact:true}).waitFor();
  await page.getByRole('button',{name:'我的',exact:true}).click();await page.getByRole('button',{name:'设置',exact:true}).click();await page.getByLabel('开启调试功能').click();await page.getByRole('button',{name:'应用设置并返回地图'}).click();
  await page.getByRole('button',{name:'应用设置并返回地图'}).waitFor({state:'hidden'});
  await page.getByRole('button',{name:'审核',exact:true}).click();await page.getByText('调试已开启，暂无法审批。正式审批数据保留，关闭调试后可继续处理。',{exact:true}).waitFor();
@@ -47,6 +54,11 @@ try{
  await mkdir('artifacts',{recursive:true});await page.screenshot({path:'artifacts/account-profile.png'});
  await page.getByRole('button',{name:'设置',exact:true}).click();await page.getByRole('button',{name:'退出登录',exact:true}).click();await page.getByRole('button',{name:'我的',exact:true}).click();await page.getByRole('button',{name:'登录 / 注册'}).waitFor();
  if(await page.getByRole('button',{name:'审核',exact:true}).count())throw Error('Admin tab survives logout');
+ await page.reload();await page.getByRole('button',{name:'暂不登录，随便看看'}).click();await page.getByRole('button',{name:'我的',exact:true}).click();await page.getByRole('button',{name:'登录 / 注册'}).waitFor();
+ if(await page.evaluate(()=>localStorage.getItem('citypulse.session.v1')))throw Error('Logout kept credential');
+ await page.getByRole('button',{name:'登录 / 注册'}).click();
+ if(await page.getByLabel('邮箱',{exact:true}).inputValue()!==accounts[0].email)throw Error('Last account not prefilled');
+ if(await page.getByLabel('密码',{exact:true}).inputValue()!=='')throw Error('Password retained after logout');
  if(errors.length)throw Error(errors.join('\n'));
  console.log(JSON.stringify({passed:true,checks:['guest bypass and map','nickname remains pending','admin nickname approval','profile visible after approval','favorite card/list toggle','WeChat placeholder','debug role isolation','debug approval notice','logout while debugging'],errors}));
 }finally{

@@ -27,6 +27,78 @@ def auth_client():
     engine.dispose()
 
 
+def test_persistent_session_renewal_and_device_logout(auth_client):
+    client, session = auth_client
+    credentials = {'email': 'remember@example.com', 'password': 'remember-this-test-password'}
+    client.post('/api/v1/auth/register', json=credentials)
+    first = client.post('/api/v1/auth/login', json=credentials).json()
+    second = client.post('/api/v1/auth/login', json=credentials).json()
+    from app.core.security import token_hash, aware_utc
+    record = session.get(AuthSession, token_hash(first['access_token']))
+    assert aware_utc(record.expires_at) > datetime.now(UTC) + timedelta(days=179)
+    record.expires_at = datetime.now(UTC) + timedelta(hours=1)
+    session.add(record)
+    session.commit()
+    headers = {'Authorization': 'Bearer ' + first['access_token']}
+    result = client.post('/api/v1/auth/session', headers=headers)
+    assert result.status_code == 200
+    assert result.headers['cache-control'] == 'no-store'
+    assert result.json()['access_token'] == first['access_token']
+    assert aware_utc(record.expires_at) > datetime.now(UTC) + timedelta(days=179)
+    assert client.post('/api/v1/auth/logout', headers=headers).status_code == 204
+    assert client.post('/api/v1/auth/session', headers=headers).status_code == 401
+    other = {'Authorization': 'Bearer ' + second['access_token']}
+    assert client.post('/api/v1/auth/session', headers=other).status_code == 200
+    user = session.exec(select(User).where(User.email == credentials['email'])).one()
+    user.is_active = False
+    session.add(user)
+    session.commit()
+    assert client.post('/api/v1/auth/session', headers=other).status_code == 401
+
+
+def test_logout_other_devices_requires_password_and_preserves_current(auth_client):
+    client, _ = auth_client
+    credentials = {'email': 'devices@example.com', 'password': 'devices-test-password'}
+    another = {'email': 'another@example.com', 'password': 'another-test-password'}
+    for account in [credentials, another]:
+        assert client.post('/api/v1/auth/register', json=account).status_code == 201
+    def login(account):
+        token = client.post('/api/v1/auth/login', json=account).json()['access_token']
+        return {'Authorization': 'Bearer ' + token}
+    current, phone, web, unrelated = login(credentials), login(credentials), login(credentials), login(another)
+    url = '/api/v1/auth/logout-others'
+    body = {'password': credentials['password']}
+    assert client.post(url, json=body).status_code == 401
+    assert client.post(url, headers=current, json={'password': 'wrong'}).status_code == 400
+    for headers in [current, phone, web, unrelated]:
+        assert client.get('/api/v1/auth/me', headers=headers).status_code == 200
+    # Rate limiting is separately tested below; this assertion exercises revocation.
+    _attempts.clear()
+    result = client.post(url, headers=current, json=body)
+    assert result.status_code == 200 and result.json()['revoked_count'] == 2
+    for headers in [phone, web]:
+        assert client.get('/api/v1/auth/me', headers=headers).status_code == 401
+        assert client.post('/api/v1/auth/session', headers=headers).status_code == 401
+    for headers in [current, unrelated]:
+        assert client.post('/api/v1/auth/session', headers=headers).status_code == 200
+    assert client.post(url, headers=current, json=body).json()['revoked_count'] == 0
+
+
+def test_logout_other_devices_limits_password_attempts(auth_client):
+    client, _ = auth_client
+    account = {'email': 'limit@example.com', 'password': 'rate-limit-test-password'}
+    client.post('/api/v1/auth/register', json=account)
+    token = client.post('/api/v1/auth/login', json=account).json()['access_token']
+    headers = {'Authorization': 'Bearer ' + token}
+    _attempts.clear()
+    for _ in range(10):
+        assert client.post('/api/v1/auth/logout-others', headers=headers,
+                           json={'password': 'wrong'}).status_code == 400
+    assert client.post('/api/v1/auth/logout-others', headers=headers,
+                       json={'password': 'wrong'}).status_code == 429
+    assert client.get('/api/v1/auth/me', headers=headers).status_code == 200
+
+
 def test_registration_roles_login_and_revocable_logout(auth_client):
     client, session = auth_client
     credentials = {"email": "Reader@example.com", "password": "a-long-test-password"}

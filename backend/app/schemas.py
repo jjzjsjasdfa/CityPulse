@@ -21,6 +21,11 @@ class Credentials(BaseModel):
     password: str = Field(min_length=12, max_length=128)
 
 
+class PasswordConfirmation(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    password: str = Field(min_length=1, max_length=128)
+
+
 class UserPublic(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: UUID

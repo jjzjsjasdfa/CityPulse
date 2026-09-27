@@ -20,6 +20,7 @@ import { eventLink } from '../eventLinks';
 import { categoryColors, categoryLabels, colors, formatDate, statusLabels } from '../theme';
 
 interface Props {
+  presentation?: 'panel' | 'modal';
   event: EventDetail | null;
   loading: boolean;
   saved: boolean;
@@ -28,7 +29,7 @@ interface Props {
   onSubmitCorrection: (message: string) => Promise<void>;
 }
 
-export function DetailSheet({ event, loading, saved, onClose, onToggleSaved, onSubmitCorrection }: Props) {
+export function DetailSheet({ event, loading, saved, onClose, onToggleSaved, onSubmitCorrection, presentation = 'modal' }: Props) {
   const [showCorrection, setShowCorrection] = useState(false);
   const [message, setMessage] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -82,8 +83,7 @@ export function DetailSheet({ event, loading, saved, onClose, onToggleSaved, onS
     }
   };
 
-  return (
-    <Modal animationType="slide" onRequestClose={onClose} presentationStyle="pageSheet" visible>
+  const content = (
       <View style={styles.container}>
         <View style={styles.topBar}>
           <Pressable accessibilityRole="button" accessibilityLabel="关闭活动详情" hitSlop={10} onPress={onClose}>
@@ -212,8 +212,8 @@ export function DetailSheet({ event, loading, saved, onClose, onToggleSaved, onS
           <Text style={styles.disclaimer}>报名、购票及变更信息请以主办方官方页面为准。</Text>
         </ScrollView>
       </View>
-    </Modal>
   );
+  return presentation === 'panel' ? content : <Modal animationType="slide" onRequestClose={onClose} presentationStyle="pageSheet" visible>{content}</Modal>;
 }
 
 const styles = StyleSheet.create({

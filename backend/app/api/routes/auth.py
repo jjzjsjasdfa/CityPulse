@@ -7,6 +7,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy import delete
 from sqlmodel import select
 
 from app.core.security import (
@@ -16,13 +17,18 @@ from app.core.security import (
     hash_password,
     token_hash,
     verify_password,
+    bearer,
+    aware_utc,
 )
 from app.models import AuthSession, NicknameChange, User
+from fastapi.security import HTTPAuthorizationCredentials
 from app.schemas import Credentials, LoginResponse, UserPublic, ProfileUpdate, NicknameChangeInput
+from app.schemas import PasswordConfirmation
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 _attempts: OrderedDict[str, list[float]] = OrderedDict()
 _lock = Lock()
+SESSION_LIFETIME = timedelta(days=180)
 
 
 def rate_limit(request: Request) -> None:
@@ -63,7 +69,7 @@ def login(body: Credentials, session: SessionDep, response: Response) -> LoginRe
     if not verify_password(body.password, user.password_hash) or not user.is_active:
         raise HTTPException(401, "Invalid email or password")
     token = secrets.token_urlsafe(32)
-    expiry = datetime.now(UTC) + timedelta(hours=12)
+    expiry = datetime.now(UTC) + SESSION_LIFETIME
     session.add(AuthSession(token_hash=token_hash(token), user_id=user.id, expires_at=expiry))
     session.commit()
     response.headers["Cache-Control"] = "no-store"
@@ -75,6 +81,22 @@ def login(body: Credentials, session: SessionDep, response: Response) -> LoginRe
 @router.get("/me", response_model=UserPublic)
 def me(user: UserDep) -> User:
     return user
+
+
+@router.post('/session', response_model=LoginResponse)
+def renew_session(
+    session: SessionDep, user: UserDep, response: Response,
+    record: Annotated[AuthSession, Depends(current_session)],
+    credentials: Annotated[HTTPAuthorizationCredentials, Depends(bearer)],
+) -> LoginResponse:
+    # Preserve each device's independently revocable session. Concurrent tabs can
+    # renew the same credential without invalidating one another.
+    record.expires_at = datetime.now(UTC) + SESSION_LIFETIME
+    session.add(record)
+    session.commit()
+    response.headers['Cache-Control'] = 'no-store'
+    return LoginResponse(access_token=credentials.credentials,
+                         expires_at=aware_utc(record.expires_at), user=UserPublic.model_validate(user))
 
 
 @router.put('/me', response_model=UserPublic)
@@ -128,3 +150,19 @@ def bindings(user: UserDep):
 def logout(session: SessionDep, record: Annotated[AuthSession, Depends(current_session)]) -> None:
     session.delete(record)
     session.commit()
+
+
+@router.post('/logout-others', dependencies=[Depends(rate_limit)])
+def logout_others(
+    body: PasswordConfirmation, session: SessionDep, user: UserDep,
+    record: Annotated[AuthSession, Depends(current_session)],
+):
+    if not verify_password(body.password, user.password_hash):
+        # The session remains valid when password confirmation fails.
+        raise HTTPException(400, '密码不正确，请重新输入')
+    result = session.execute(delete(AuthSession).where(
+        AuthSession.user_id == user.id,
+        AuthSession.token_hash != record.token_hash,
+    ))
+    session.commit()
+    return {'revoked_count': result.rowcount}

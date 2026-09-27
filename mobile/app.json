@@ -7,20 +7,32 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "scheme": "citypulse",
-    "plugins": [["expo-location", {
-      "locationWhenInUsePermission": "允许城迹使用你的位置，以居中地图并提示附近7公里内的新活动。",
-      "isIosBackgroundLocationEnabled": false,
-      "isAndroidBackgroundLocationEnabled": false,
-      "isAndroidForegroundServiceEnabled": false
-    }], ["expo-image-picker", {
-      "photosPermission": "选择活动海报，用于识别阵容和活动信息。",
-      "cameraPermission": false,
-      "microphonePermission": false
-    }]],
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "允许城迹使用你的位置，以居中地图并提示附近7公里内的新活动。",
+          "isIosBackgroundLocationEnabled": false,
+          "isAndroidBackgroundLocationEnabled": false,
+          "isAndroidForegroundServiceEnabled": false
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "选择活动海报，用于识别阵容和活动信息。",
+          "cameraPermission": false,
+          "microphonePermission": false
+        }
+      ],
+      "expo-secure-store"
+    ],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.citypulse.mobile",
-      "infoPlist": { "CADisableMinimumFrameDurationOnPhone": true }
+      "infoPlist": {
+        "CADisableMinimumFrameDurationOnPhone": true
+      }
     },
     "android": {
       "adaptiveIcon": {

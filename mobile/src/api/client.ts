@@ -1,4 +1,6 @@
 import Constants from 'expo-constants';
+import { readSession, writeSession } from './sessionStorage';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import { demoApiURL } from './demoHost';
 import { DEMO_MODE, demoQuery, appNow, nearbyRadius } from '../demo';
@@ -9,11 +11,51 @@ import type { Coordinate } from '../map/geo';
 import { loadMapPages } from '../map/loadPages';
 import { queryBounds, type MapBounds } from '../map/presentation';
 
-// Session-only storage: credentials never enter AsyncStorage or browser localStorage.
 let accessToken: string | null = null;
+const LAST_ACCOUNT = '@citypulse/last-account-v1';
+export async function lastAccount(): Promise<string> {
+  return (await AsyncStorage.getItem(LAST_ACCOUNT)) || '';
+}
+async function rememberSession(result: LoginResponse) {
+  await persistSession(JSON.stringify({ access_token: result.access_token, expires_at: result.expires_at, origin: realApiURL() }));
+  await AsyncStorage.setItem(LAST_ACCOUNT, result.user.email);
+}
+export async function renewSession(): Promise<LoginResponse | null> {
+  const token = accessToken;
+  if (!token) return null;
+  const result = await request<LoginResponse>('/auth/session', { method: 'POST', signal: AbortSignal.timeout(10000) });
+  if (accessToken !== token) return null;
+  await rememberSession(result);
+  return result;
+}
+let storageWrites: Promise<void> = Promise.resolve();
+function persistSession(value: string | null) {
+  storageWrites = storageWrites.catch(() => undefined).then(() => writeSession(value));
+  return storageWrites;
+}
 let onUnauthorized: (() => void) | undefined;
 export function setAuthHandler(handler: () => void) { onUnauthorized = handler; }
-export function clearSession() { accessToken = null; }
+export function clearSession() { accessToken = null; void persistSession(null).catch(() => undefined); }
+
+export async function restoreSession(): Promise<LoginResponse | null> {
+  await storageWrites.catch(() => undefined);
+  const raw = await readSession();
+  if (!raw) return null;
+  let saved: { access_token: string; expires_at: string; origin: string };
+  try {
+    saved = JSON.parse(raw);
+    if (!saved.access_token || saved.origin !== realApiURL() || !Number.isFinite(Date.parse(saved.expires_at))) throw new Error();
+  } catch { clearSession(); return null; }
+  accessToken = saved.access_token;
+  try {
+    return await renewSession();
+  } catch (error) {
+    accessToken = null;
+    if (error instanceof ApiError && error.status === 401) return null;
+    // Keep the saved credential on temporary network failures so retry can restore it.
+    throw error;
+  }
+}
 
 const emulatorHost = Platform.OS === 'android' ? '10.0.2.2' : 'localhost';
 function developmentHost() {
@@ -38,6 +80,7 @@ export class ApiError extends Error {
 }
 
 export async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const requestToken = accessToken;
   const real = !DEMO_MODE || path.startsWith('/auth/');
   if (DEMO_MODE && path.startsWith('/admin/')) throw new ApiError('调试已开启，暂无法审批。请关闭调试后继续。', 409);
   const response = await fetch(real ? `${realApiURL()}${path}` : demoURL(path), {
@@ -46,7 +89,7 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   });
   if (!response.ok) {
     const payload = (await response.json().catch(() => ({}))) as ApiErrorEnvelope;
-    if (response.status === 401 && real && accessToken) {
+    if (response.status === 401 && real && requestToken && requestToken === accessToken) {
       clearSession();
       onUnauthorized?.();
     }
@@ -60,6 +103,7 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export async function signIn(email: string, password: string): Promise<LoginResponse> {
   const result = await request<LoginResponse>('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) });
   accessToken = result.access_token;
+  await rememberSession(result);
   return result;
 }
 export async function register(email: string, password: string): Promise<User> {
@@ -68,6 +112,7 @@ export async function register(email: string, password: string): Promise<User> {
 export async function signOut(): Promise<void> {
   await request('/auth/logout', { method: 'POST' });
   clearSession();
+  await storageWrites;
 }
 export function listCandidates(status: CandidateStatus, offset = 0): Promise<Candidate[]> {
   return request(`/admin/candidates?status=${status}&offset=${offset}&limit=20`);

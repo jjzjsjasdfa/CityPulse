@@ -1,12 +1,18 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput } from 'react-native';
 
-import { register, signIn } from '../api/client';
+import { lastAccount, register, signIn } from '../api/client';
 import type { LoginResponse } from '../api/types';
 import { colors } from '../theme';
 
 export function LoginScreen({ onLogin, onSkip }: { onLogin: (session: LoginResponse) => void; onSkip?:()=>void }) {
   const [email, setEmail] = useState('');
+  const emailEdited = useRef(false);
+  useEffect(() => {
+    let active = true;
+    void lastAccount().then(value => { if (active && !emailEdited.current) setEmail(value); }).catch(() => undefined);
+    return () => { active = false; };
+  }, []);
   const [password, setPassword] = useState('');
   const [creating, setCreating] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -34,7 +40,7 @@ export function LoginScreen({ onLogin, onSkip }: { onLogin: (session: LoginRespo
     <Text style={styles.title}>{creating ? '创建账号' : '欢迎回来'}</Text>
     <Text style={styles.copy}>无需登录也能浏览活动与地图。登录后可同步收藏、识别海报。</Text>
     <Text style={styles.label}>邮箱</Text>
-    <TextInput accessibilityLabel="邮箱" autoCapitalize="none" autoComplete="email" keyboardType="email-address" value={email} onChangeText={setEmail} style={styles.input} />
+    <TextInput accessibilityLabel="邮箱" autoCapitalize="none" autoComplete="email" keyboardType="email-address" value={email} onChangeText={value=>{emailEdited.current=true;setEmail(value);}} style={styles.input} />
     <Text style={styles.label}>密码（12–128 个字符）</Text>
     <TextInput accessibilityLabel="密码" autoCapitalize="none" autoComplete={creating ? 'new-password' : 'current-password'} secureTextEntry value={password} onChangeText={setPassword} maxLength={128} style={styles.input} onSubmitEditing={() => { void submit(); }} />
     {!!error && <Text accessibilityRole="alert" style={styles.error}>{error}</Text>}
