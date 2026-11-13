@@ -4,13 +4,16 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput }
 import { register, signIn } from '../api/client';
 import type { LoginResponse } from '../api/types';
 import { colors } from '../theme';
+import { RequiredHint, RequiredMark } from '../components/RequiredField';
 
+/** Displays sign-in/registration forms and passes a successful session to `onLogin`. */
 export function LoginScreen({ onLogin }: { onLogin: (session: LoginResponse) => void }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [creating, setCreating] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  /** Validates credentials, optionally registers, then signs the user in. */
   const submit = async () => {
     if (busy) return;
     const normalizedEmail = email.trim();
@@ -33,9 +36,10 @@ export function LoginScreen({ onLogin }: { onLogin: (session: LoginResponse) => 
     <Text style={styles.brand}>CITYPULSE · 长沙</Text>
     <Text style={styles.title}>{creating ? '创建账号' : '欢迎回来'}</Text>
     <Text style={styles.copy}>登录后发现已审核的城市活动，收藏你想去的地方。</Text>
-    <Text style={styles.label}>邮箱</Text>
+    <RequiredHint />
+    <Text style={styles.label}>邮箱<RequiredMark /></Text>
     <TextInput accessibilityLabel="邮箱" autoCapitalize="none" autoComplete="email" keyboardType="email-address" value={email} onChangeText={setEmail} style={styles.input} />
-    <Text style={styles.label}>密码（12–128 个字符）</Text>
+    <Text style={styles.label}>密码（12–128 个字符）<RequiredMark /></Text>
     <TextInput accessibilityLabel="密码" autoCapitalize="none" autoComplete={creating ? 'new-password' : 'current-password'} secureTextEntry value={password} onChangeText={setPassword} maxLength={128} style={styles.input} onSubmitEditing={() => { void submit(); }} />
     {!!error && <Text accessibilityRole="alert" style={styles.error}>{error}</Text>}
     <Pressable accessibilityRole="button" disabled={busy} onPress={submit}

@@ -2,7 +2,7 @@
 
 CityPulse is a Changsha event discovery app with a FastAPI/PostGIS backend and an
 Expo React Native frontend. Showstart listings enter an administrator review queue.
-Only approved, published, non-demo events appear in the public feed and map.
+Only approved, published events appear in the public feed and map.
 
 ## Start
 
@@ -82,20 +82,14 @@ an administrator; the importer reads Showstart detail addresses, coordinates and
 time ranges without guessing event duration or organizer. Administrators can use
 **补充详情和地点** on existing candidates. An optional server-side `AMAP_API_KEY`
 enables city + venue-name lookup when the source location is incomplete.
-Existing demo database rows are preserved but unpublished and excluded by all
-public event endpoints. Synthetic fixtures are confined to tests and the explicitly enabled demo service.
-
-## Maps and optional debug mode
+## Maps
 
 The map supports continuous zoom, category controls, collision-aware markers,
 location guidance, and nearby publication alerts. Viewport queries paginate and
 support areas outside Changsha. Saved event coordinates persist per account.
+The mobile app uses typed bottom-tab navigation for Feed, Map, Saved, and Admin,
+plus a stack route for event details and deep links such as `citypulse://event/123`.
 See [map behavior](docs/MAP_DISPLAY.md) and [location guidance](docs/LOCATION_GUIDANCE.md).
-
-**我的 → 设置** provides an explicit debug switch with a simulated clock, location,
-alert replay and performance monitor. Debug mode uses a separate in-memory API
-and storage namespace, never production accounts or admin actions. Real data remains
-the default. See [demo setup](docs/DEMO_DATA.md) and [debug settings](docs/DEBUG_SETTINGS.md).
 
 ## Development and verification
 

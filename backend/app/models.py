@@ -72,6 +72,7 @@ class User(SQLModel, table=True):
     role: UserRole = Field(default=UserRole.regular, sa_column=Column(String(16), nullable=False))
     is_active: bool = True
     created_at: datetime = Field(default_factory=utc_now, sa_type=DateTime(timezone=True))
+    updated_at: datetime = Field(default_factory=utc_now, sa_type=DateTime(timezone=True))
 
 
 class AuthSession(SQLModel, table=True):
@@ -80,6 +81,25 @@ class AuthSession(SQLModel, table=True):
     token_hash: str = Field(max_length=64, primary_key=True)
     user_id: UUID = Field(foreign_key="users.id", ondelete="CASCADE", index=True)
     expires_at: datetime = Field(sa_type=DateTime(timezone=True), index=True)
+
+
+class UserRevision(SQLModel, table=True):
+    __tablename__ = "user_revisions"
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    user_id: UUID = Field(foreign_key="users.id", ondelete="CASCADE", index=True)
+    actor_id: UUID = Field(foreign_key="users.id")
+    action: str = Field(max_length=40)
+    note: str = Field(max_length=1000)
+    before: dict = Field(
+        default_factory=dict,
+        sa_column=Column(JSONB().with_variant(JSON(), "sqlite"), nullable=False),
+    )
+    after: dict = Field(
+        default_factory=dict,
+        sa_column=Column(JSONB().with_variant(JSON(), "sqlite"), nullable=False),
+    )
+    created_at: datetime = Field(default_factory=utc_now, sa_type=DateTime(timezone=True))
 
 
 class Source(SQLModel, table=True):
@@ -128,8 +148,8 @@ class Event(SQLModel, table=True):
     )
     official_url: str = Field(max_length=500)
     is_ad: bool = False
-    is_demo: bool = False
     is_published: bool = False
+    archived_at: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))
     published_at: datetime = Field(sa_column=Column(DateTime(timezone=True), nullable=False))
     created_at: datetime = Field(
         default_factory=utc_now,

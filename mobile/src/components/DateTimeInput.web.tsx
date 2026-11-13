@@ -1,6 +1,7 @@
 import { Text, View } from 'react-native';
 import type { DateTimeProps } from './DateTimeInput';
 
+/** Web date/time field with the same value, callback, label, and state props as native. */
 export function DateTimeInput({ value, onChange, label, disabled, invalid }: DateTimeProps) {
   const instant = Date.parse(value);
   const local = Number.isFinite(instant) ? new Date(instant + 8 * 3600000).toISOString().slice(0, 16) : '';

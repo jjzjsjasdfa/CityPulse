@@ -93,7 +93,8 @@ try {
       if (path === '/admin/events') {
         const offset = Number(url.searchParams.get('offset'));
         const rows = events.filter((event) => (!url.searchParams.has('published') || event.is_published === (url.searchParams.get('published') === 'true')) && event.name.includes(url.searchParams.get('q') ?? ''));
-        return json(rows.slice(offset, offset + 20));
+        const data = rows.slice(offset, offset + 20).map(({ id, name, status, starts_at, is_published, archived_at }) => ({ id, name, status, starts_at, is_published, archived_at }));
+        return json({ data, meta: { offset, limit: 20, total: rows.length, has_next: offset + data.length < rows.length } });
       }
       if (path.startsWith('/admin/events/')) {
         const event = events.find((event) => path.includes(event.id));
@@ -101,9 +102,10 @@ try {
         if (request.method() === 'PUT') return json(applyEdit(event, request.postDataJSON()));
         return json(event);
       }
-      if (path === '/admin/corrections') return json(corrections.filter((report) => report.status === url.searchParams.get('status')));
+      if (path === '/admin/corrections') return json(corrections.filter((report) => report.status === url.searchParams.get('status')).map((report) => ({ id: report.id, kind: report.kind, message_preview: report.message, status: report.status, created_at: report.created_at })));
       if (path.startsWith('/admin/corrections/')) {
         const report = corrections.find((report) => path.includes(report.id));
+        if (request.method() === 'GET') return json(report);
         const body = request.postDataJSON();
         assert.equal(body.expected_updated_at, report.updated_at);
         if (body.event_update) applyEdit(events.find((event) => event.id === report.event_id), body.event_update);
@@ -111,8 +113,9 @@ try {
         return json(report);
       }
       if (path.endsWith('/comparison')) return json({ event_id: null, changes: [] });
-      if (request.method() === 'GET') return json(candidates.filter((candidate) => candidate.review_status === url.searchParams.get('status')));
+      if (path === '/admin/candidates' && request.method() === 'GET') return json(candidates.filter((candidate) => candidate.review_status === url.searchParams.get('status')).map(({ id, name, category, venue_name, price, starts_at, review_status }) => ({ id, name, category, venue_name, price, starts_at, review_status })));
       const candidate = candidates.find((candidate) => path.includes(candidate.id));
+      if (request.method() === 'GET') return json(candidate);
       const body = request.postDataJSON();
       assert.equal(body.expected_updated_at, candidate.updated_at);
       if (path.endsWith('/enrich')) {
@@ -133,7 +136,7 @@ try {
         assert.equal(body.latitude, 28.25);
         candidate.review_status = 'approved';
         candidate.event_id = candidate.id;
-        events.push({ ...body, id: candidate.id, slug: candidate.id, updated_at: updated, is_published: true, attributes: [], is_demo: false, is_ad: false, is_new: true, is_ending_soon: true, last_verified_at: updated, confidence: 0.7 });
+        events.push({ ...body, id: candidate.id, slug: candidate.id, updated_at: updated, is_published: true, attributes: [], is_ad: false, is_new: true, is_ending_soon: true, last_verified_at: updated, confidence: 0.7 });
       } else { rejections++; candidate.review_status = 'rejected'; }
       return json(candidate);
     }
@@ -164,14 +167,14 @@ try {
   await page.getByLabel('密码', { exact: true }).fill('browser-test-password');
   await registerButton.click();
   await page.getByText('这个筛选下还没有已审核的活动。').waitFor();
-  assert.equal(await page.getByRole('button', { name: '审核', exact: true }).count(), 0);
+  assert.equal(await page.getByRole('button', { name: '管理', exact: true }).count(), 0);
   assert.equal(privateRequests, 0);
   await page.getByRole('button', { name: '退出', exact: true }).click();
   await page.getByLabel('邮箱', { exact: true }).fill('admin@example.com');
   await page.getByLabel('密码', { exact: true }).fill('browser-test-password');
   await page.getByRole('button', { name: '登录', exact: true }).click();
-  await page.getByRole('button', { name: '审核', exact: true }).click();
-  await page.getByText('Browser test concert 1', { exact: true }).click();
+  await page.getByRole('button', { name: '管理', exact: true }).click();
+  await page.getByRole('button', { name: /^Browser test concert 1/ }).click();
   await page.getByLabel('审核记录 / 拒绝原因', { exact: true }).fill('Verified browser test');
   await page.getByRole('button', { name: '通过并公开', exact: true }).click();
   const feedback = page.getByTestId('review-submit-feedback');
@@ -205,7 +208,7 @@ try {
   await page.getByRole('button', { name: '保存草稿', exact: true }).click();
   await page.getByText('草稿已保存到本机。').waitFor();
   await page.getByRole('button', { name: '← 返回列表', exact: true }).click();
-  await page.getByText('Browser test concert 1', { exact: true }).click();
+  await page.getByRole('button', { name: /^Browser test concert 1/ }).click();
   await page.getByRole('button', { name: '恢复草稿', exact: true }).click();
   assert.equal(await page.getByLabel('摘要', { exact: true }).inputValue(), 'Browser test summary');
   assert.equal(await page.getByLabel('详细地址', { exact: true }).inputValue(), 'Manually verified address');
@@ -242,7 +245,7 @@ try {
   await page.getByRole('button', { name: '登录', exact: true }).click();
   await page.getByRole('button', { name: '查看Browser test concert 1' }).waitFor();
   assert.equal(await page.getByText('Browser test concert 2', { exact: true }).count(), 0);
-  assert.equal(await page.getByRole('button', { name: '审核', exact: true }).count(), 0);
+  assert.equal(await page.getByRole('button', { name: '管理', exact: true }).count(), 0);
   await page.getByRole('button', { name: '往期活动', exact: true }).click();
   await page.getByRole('button', { name: '查看Browser test concert 3' }).waitFor();
   assert.equal(await page.getByRole('button', { name: '查看Browser test concert 1' }).count(), 0);
@@ -250,16 +253,18 @@ try {
   // A real user report reaches the admin inbox and updates the public event.
   await page.getByRole('button', { name: '全部', exact: true }).click();
   await page.getByRole('button', { name: '查看Browser test concert 1' }).click();
+  assert.match(new URL(page.url()).pathname, /^\/event\//, 'event detail is represented in navigation history');
   await page.getByRole('button', { name: '发现信息有误？提交纠错', exact: true }).click();
   await page.getByLabel('纠错说明').fill('The event venue address needs a correction.');
   await page.getByRole('button', { name: '提交审核', exact: true }).click();
   await page.getByText('纠错已进入审核队列，感谢你帮助保持信息准确。').waitFor();
   await page.getByRole('button', { name: '关闭活动详情', exact: true }).click();
+  assert.doesNotMatch(new URL(page.url()).pathname, /^\/event\//, 'closing detail returns to the previous route');
   await page.getByRole('button', { name: '退出', exact: true }).click();
   await page.getByLabel('邮箱', { exact: true }).fill('admin@example.com');
   await page.getByLabel('密码', { exact: true }).fill('browser-test-password');
   await page.getByRole('button', { name: '登录', exact: true }).click();
-  await page.getByRole('button', { name: '审核', exact: true }).click();
+  await page.getByRole('button', { name: '管理', exact: true }).click();
   await page.getByRole('button', { name: '纠错收件箱', exact: true }).click();
   await page.getByText('The event venue address needs a correction.', { exact: true }).click();
   await page.getByRole('button', { name: '编辑活动并应用纠错', exact: true }).click();
@@ -269,14 +274,14 @@ try {
   await page.getByText('已保存，公开活动信息已同步。').waitFor();
   assert.equal(corrections[0].status, 'accepted');
   assert.equal(events[0].address, 'Corrected address from admin');
-  await page.getByRole('button', { name: '活动管理', exact: true }).click();
-  await page.getByText('Browser test concert 1', { exact: true }).click();
+  await page.getByRole('button', { name: '活动', exact: true }).click();
+  await page.getByRole('button', { name: /^Browser test concert 1/ }).click();
   await clickFormAction('已取消');
   await page.getByLabel('审核记录 / 拒绝原因', { exact: true }).fill('Confirmed cancellation');
   await clickFormAction('保存活动修改');
   await page.getByText('已保存，公开活动信息已同步。').waitFor();
   assert.equal(events[0].status, 'cancelled');
-  await page.getByText('Browser test concert 1', { exact: true }).click();
+  await page.getByRole('button', { name: /^Browser test concert 1/ }).click();
   await clickFormAction('下架');
   await page.getByLabel('审核记录 / 拒绝原因', { exact: true }).fill('Remove from public listing');
   await clickFormAction('保存活动修改');

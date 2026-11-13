@@ -4,7 +4,7 @@ import { CategoryChips } from '../map/CategoryChips';
 import { useMarkerLayout } from '../map/useMarkerLayout';
 import { useNativeMarkerOffset } from '../map/useNativeMarkerOffset';
 import { Platform, StyleSheet, View, useWindowDimensions } from 'react-native';
-import MapView, { Circle, Marker, type MapMarker, type Region } from 'react-native-maps';
+import MapView, { Marker, type MapMarker, type Region } from 'react-native-maps';
 
 import type { EventCategory, MapEvent } from '../api/types';
 import { EventMarker, markerHeight, markerLabelWidth } from '../map/EventMarker';
@@ -17,8 +17,8 @@ import { regionAtDefaultScale } from '../map/geo';
 import { EdgeGuidance } from '../map/EdgeGuidance';
 import { LocationControls, UserLocationDot } from '../map/LocationControls';
 import { categoryLabels, statusLabels } from '../theme';
-import { DEMO_MODE, nearbyRadius } from '../demo';
 
+/** Wraps one native map marker and controls redraws, offsets, and selection. */
 const NativeEventMarker = memo(function NativeEventMarker({ point, dx, dy, level, detail, labelVisible, now, width, saved, unread, haloUntil, onSelectId }: {
   dx: number; dy: number;
   point: MapEvent; level: MapLevel; detail: MapDetail; labelVisible: boolean; now: number; width: number; saved: boolean; unread: boolean; haloUntil: number; onSelectId: (id: string) => void;
@@ -47,12 +47,14 @@ const NativeEventMarker = memo(function NativeEventMarker({ point, dx, dy, level
   );
 });
 
+/** Renders the native map from shared map data and reports camera/selection changes. */
 export function MapScreen({ session, unreadIds, haloUntil, onVisibleEvents, points, savedIds, onBoundsChange, onSelectId, position, locationStatus,
   onLocate, newEvents, onSeenEvents, ...state }: MapScreenProps) {
   const window = useWindowDimensions();
   const interacting = useRef(false);
   const insets = useSafeAreaInsets();
   const [hidden, setHidden] = useState(new Set<EventCategory>(session.hiddenCategories));
+  /** Shows or hides `category` and persists that choice in this launch's map session. */
   const toggle = (category: EventCategory) => setHidden(current => { const next = new Set(current); next.has(category)?next.delete(category):next.add(category); session.hiddenCategories=[...next]; return next; });
   const [size, setSize] = useState({ width: window.width, height: window.height });
   const [region, setRegion] = useState<Region>(() => session.region ?? regionAtDefaultScale(position ?? INITIAL_REGION, size));
@@ -73,7 +75,9 @@ export function MapScreen({ session, unreadIds, haloUntil, onVisibleEvents, poin
   const versionKey = placements.map(item => item.point.published_at ?? item.point.starts_at).join(',');
   useEffect(() => { onVisibleEvents(visibleKey ? visibleKey.split(',') : []); }, [visibleKey, versionKey, onVisibleEvents]);
   const movementTime = useRef(0);
+  /** Stores camera `next` and reports its geographic bounds to the app shell. */
   const updateRegion = (next: Region) => { session.region = next; viewport.current = next; setRegion(next); onBoundsChange(boundsFromRegion(next)); };
+  /** Centers the camera on the current device position, or retries location first. */
   const recenter = () => {
     if (!position) { onLocate(); return; }
     centered.current = true;
@@ -104,7 +108,6 @@ export function MapScreen({ session, unreadIds, haloUntil, onVisibleEvents, poin
         }}
         onRegionChangeComplete={updateRegion} rotateEnabled={false} pitchEnabled={false}
         moveOnMarkerPress={false} showsScale={Platform.OS === 'ios'} zoomControlEnabled={false} style={StyleSheet.absoluteFill}>
-        {position && DEMO_MODE && nearbyRadius()>0 && <Circle center={position} radius={nearbyRadius()*1000} strokeColor="#38BDB6" strokeWidth={1.5} lineDashPattern={[6,7]} fillColor="transparent" />}
         {position && <Marker key="my-location" coordinate={position} anchor={{ x: 0.5, y: 0.5 }}
           centerOffset={{ x: 0, y: 0 }} title="我的位置" accessibilityLabel="我的位置" zIndex={1000} tracksViewChanges={false}>
           <UserLocationDot />

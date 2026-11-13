@@ -4,6 +4,7 @@ import Svg, { Circle, Defs, RadialGradient, Stop } from 'react-native-svg';
 import type { EventCategory } from '../api/types';
 import { signalColors } from '../theme';
 export const HALO_DURATION = 60000;
+/** Draws an animated native halo for event `id` in its category color until `until`. */
 export function ActivityHalo({ id, category, until }: { id: string; category: EventCategory; until: number }) {
   const [expired, setExpired] = useState(() => until <= Date.now());
   useEffect(() => { setExpired(until <= Date.now()); const timer = setTimeout(() => setExpired(true), Math.max(0, until-Date.now())); return () => clearTimeout(timer); }, [until]);

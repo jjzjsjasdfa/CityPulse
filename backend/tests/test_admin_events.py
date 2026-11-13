@@ -74,3 +74,53 @@ def test_admin_edit_cancel_reschedule_unpublish_and_source_conflict(review_clien
     assert rows[0]["actor_id"] == str(user.id)
     assert rows[0]["before"]["is_published"] is False
     assert rows[0]["after"]["is_published"] is True
+
+
+def test_admin_can_create_archive_and_restore_event(review_client):
+    client, session = review_client
+    headers, _source, _item, _candidate, event_id = published(client, session)
+    body = edit_body(client, event_id, headers, name="管理员创建的活动")
+    body.pop("expected_updated_at")
+    created = client.post("/api/v1/admin/events", headers=headers, json=body)
+    assert created.status_code == 201, created.text
+    event = created.json()
+    assert event["archived_at"] is None
+    assert client.get(f"/api/v1/events/{event['id']}").status_code == 200
+
+    archived = client.post(
+        f"/api/v1/admin/events/{event['id']}/archive",
+        headers=headers,
+        json={"expected_updated_at": event["updated_at"], "note": "Duplicate listing"},
+    )
+    assert archived.status_code == 200, archived.text
+    event = archived.json()
+    assert event["archived_at"] is not None
+    assert event["is_published"] is False
+    assert client.get(f"/api/v1/events/{event['id']}").status_code == 404
+    archived_page = client.get(
+        "/api/v1/admin/events", headers=headers, params={"archived": True}
+    ).json()
+    assert event["id"] in [row["id"] for row in archived_page["data"]]
+    assert "description" not in archived_page["data"][0]
+    assert (
+        "description" in client.get(f"/api/v1/admin/events/{event['id']}", headers=headers).json()
+    )
+
+    publish_archived = edit_body(
+        client, event["id"], headers, is_published=True, review_note="Publish too early"
+    )
+    assert (
+        client.put(
+            f"/api/v1/admin/events/{event['id']}", headers=headers, json=publish_archived
+        ).status_code
+        == 409
+    )
+    restored = client.post(
+        f"/api/v1/admin/events/{event['id']}/restore",
+        headers=headers,
+        json={"expected_updated_at": event["updated_at"], "note": "Ready for another review"},
+    )
+    assert restored.status_code == 200, restored.text
+    assert restored.json()["archived_at"] is None
+    assert restored.json()["is_published"] is False
+    assert client.get(f"/api/v1/events/{event['id']}").status_code == 404

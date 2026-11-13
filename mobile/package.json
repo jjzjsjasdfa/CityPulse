@@ -5,10 +5,14 @@
   "dependencies": {
     "@expo/metro-runtime": "~57.0.15",
     "@react-native-async-storage/async-storage": "2.2.0",
-    "expo": "~57.0.22",
+    "@react-navigation/bottom-tabs": "^7.20.0",
+    "@react-navigation/native": "^7.5.0",
+    "@react-navigation/native-stack": "^7.20.0",
+    "expo": "~57.0.26",
     "expo-constants": "~57.0.18",
     "expo-linear-gradient": "~57.0.2",
-    "expo-location": "~57.0.17",
+    "expo-linking": "~57.0.11",
+    "expo-location": "~57.0.20",
     "expo-status-bar": "~57.0.1",
     "leaflet": "^1.9.4",
     "react": "19.2.3",
@@ -16,6 +20,7 @@
     "react-native": "0.86.3",
     "react-native-maps": "1.27.2",
     "react-native-safe-area-context": "~5.7.0",
+    "react-native-screens": "~4.26.0",
     "react-native-svg": "15.15.4",
     "react-native-web": "^0.21.2"
   },
@@ -27,8 +32,6 @@
     "typescript": "~6.0.3"
   },
   "scripts": {
-    "start:demo": "node scripts/demo.mjs start",
-    "export:demo": "node scripts/demo.mjs export --platform web",
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
@@ -38,14 +41,6 @@
     "test:guidance": "node --test scripts/test-guidance.mjs",
     "generate:api": "npx --yes --package=typescript@5.9.3 --package=openapi-typescript@7.13.0 openapi-typescript openapi.json -o src/api/schema.d.ts",
     "smoke:web": "node scripts/smoke-web.mjs",
-    "smoke:map": "node scripts/smoke-map.mjs",
-    "smoke:guidance": "node scripts/smoke-guidance.mjs",
-    "smoke:demo": "node scripts/smoke-demo.mjs",
-    "smoke:hits": "node scripts/smoke-hit-targets.mjs",
-    "smoke:debug": "node scripts/smoke-debug.mjs",
-    "smoke:performance": "node scripts/smoke-performance.mjs",
-    "smoke:overlap": "node scripts/smoke-overlap.mjs",
-    "smoke:alerts": "node scripts/smoke-alert-lifecycle.mjs",
     "preview:map": "node scripts/preview-map.mjs"
   },
   "private": true

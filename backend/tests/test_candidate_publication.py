@@ -15,7 +15,7 @@ from app.core.config import settings
 from app.core.database import get_session
 from app.core.security import hash_password
 from app.ingestion.runner import _upsert_item
-from app.ingestion.showstart import ShowStartVenueAdapter
+from app.ingestion.showstart_detail import ShowStartDetailEnricher
 from app.ingestion.types import IngestionItem
 from app.main import app
 from app.models import (
@@ -83,6 +83,14 @@ def setup_review(client, session):
     return {"Authorization": f"Bearer {token}"}, source, item
 
 
+def first_candidate(client, headers):
+    summary = client.get("/api/v1/admin/candidates", headers=headers).json()[0]
+    assert "facts" not in summary and "official_url" not in summary
+    response = client.get(f"/api/v1/admin/candidates/{summary['id']}", headers=headers)
+    assert response.status_code == 200
+    return response.json()
+
+
 def approval(candidate):
     return {
         "expected_updated_at": candidate["updated_at"],
@@ -111,7 +119,7 @@ def approval(candidate):
 def test_approval_publication_reimport_rejection_and_no_duplicates(review_client):
     client, session = review_client
     headers, source, item = setup_review(client, session)
-    candidate = client.get("/api/v1/admin/candidates", headers=headers).json()[0]
+    candidate = first_candidate(client, headers)
     path = f"/api/v1/admin/candidates/{candidate['id']}"
     assert client.get("/api/v1/events").json()["data"] == []
     body = approval(candidate)
@@ -144,7 +152,7 @@ def test_approval_publication_reimport_rejection_and_no_duplicates(review_client
     detail = client.get(f"/api/v1/events/{event_id}").json()["data"]
     assert detail["sources"][0]["evidence_url"] == item.canonical_url
     assert detail["sources"][0]["is_official"] is False
-    assert detail["price"] == "¥80起" and detail["is_demo"] is False
+    assert detail["price"] == "¥80起"
     assert len(detail["status_history"]) == 1
     bounds = {"west": 112.9, "east": 113.1, "south": 28.1, "north": 28.4}
     assert client.get("/api/v1/events/map", params=bounds).json()["data"][0]["id"] == event_id
@@ -158,7 +166,7 @@ def test_approval_publication_reimport_rejection_and_no_duplicates(review_client
     assert client.get(f"/api/v1/events/{event_id}").status_code == 404
     assert client.get("/api/v1/events/map", params=bounds).json()["data"] == []
     assert client.post(path + "/approve", json=body, headers=headers).status_code == 409
-    updated = client.get("/api/v1/admin/candidates", headers=headers).json()[0]
+    updated = first_candidate(client, headers)
     response = client.post(path + "/approve", json=approval(updated), headers=headers)
     assert response.status_code == 200, response.text
     assert response.json()["event_id"] == event_id
@@ -168,7 +176,7 @@ def test_approval_publication_reimport_rejection_and_no_duplicates(review_client
     changed = IngestionItem(**{**item.__dict__, "price": "¥120起"})
     _upsert_item(session, source, changed)
     session.commit()
-    updated = client.get("/api/v1/admin/candidates", headers=headers).json()[0]
+    updated = first_candidate(client, headers)
     rejection = {"expected_updated_at": updated["updated_at"], "review_note": "Incorrect listing"}
     assert client.post(path + "/reject", json=rejection, headers=headers).status_code == 200
     assert client.get("/api/v1/events").json()["data"] == []
@@ -179,7 +187,7 @@ def test_approval_publication_reimport_rejection_and_no_duplicates(review_client
 def test_initial_rejection_never_creates_a_public_event(review_client):
     client, session = review_client
     headers, _, _ = setup_review(client, session)
-    candidate = client.get("/api/v1/admin/candidates", headers=headers).json()[0]
+    candidate = first_candidate(client, headers)
     path = f"/api/v1/admin/candidates/{candidate['id']}/reject"
     response = client.post(
         path,
@@ -201,16 +209,21 @@ def test_approved_past_events_are_discoverable_without_exposing_unpublished_even
     event_ids = []
     for number, days in enumerate([3, -10, -3]):
         if number:
-            _upsert_item(session, source, replace(
-                item,
-                canonical_url=f"https://www.showstart.com/event/{200000 + number}",
-                starts_at=datetime.now(UTC) + timedelta(days=days),
-            ))
+            _upsert_item(
+                session,
+                source,
+                replace(
+                    item,
+                    canonical_url=f"https://www.showstart.com/event/{200000 + number}",
+                    starts_at=datetime.now(UTC) + timedelta(days=days),
+                ),
+            )
             session.commit()
-        candidate = client.get("/api/v1/admin/candidates", headers=headers).json()[0]
+        candidate = first_candidate(client, headers)
         response = client.post(
             f"/api/v1/admin/candidates/{candidate['id']}/approve",
-            json=approval(candidate), headers=headers,
+            json=approval(candidate),
+            headers=headers,
         )
         assert response.status_code == 200, response.text
         event_ids.append(response.json()["event_id"])
@@ -225,12 +238,9 @@ def test_approved_past_events_are_discoverable_without_exposing_unpublished_even
     event = session.get(Event, event_ids[1])
     event.is_published = False
     session.add(event)
-    event = session.get(Event, event_ids[2])
-    event.is_demo = True
-    session.add(event)
     session.commit()
-    assert past()["data"] == []
-    assert past()["meta"]["total"] == 0
+    assert [event["id"] for event in past()["data"]] == event_ids[2:]
+    assert past()["meta"]["total"] == 1
 
 
 def test_enrichment_is_admin_only_persists_fields_and_invalidates_stale_forms(
@@ -240,7 +250,7 @@ def test_enrichment_is_admin_only_persists_fields_and_invalidates_stale_forms(
     headers, _, _ = setup_review(client, session)
     monkeypatch.setattr(settings, "ingestion_user_agent", "CityPulse integration tests")
     monkeypatch.setattr(
-        ShowStartVenueAdapter,
+        ShowStartDetailEnricher,
         "enrich",
         lambda self, item: replace(
             item,
@@ -252,7 +262,7 @@ def test_enrichment_is_admin_only_persists_fields_and_invalidates_stale_forms(
             facts={"enrichment": {"detail_status": "ok", "location_method": "showstart"}},
         ),
     )
-    candidate = client.get("/api/v1/admin/candidates", headers=headers).json()[0]
+    candidate = first_candidate(client, headers)
     path = f"/api/v1/admin/candidates/{candidate['id']}/enrich"
     body = {"expected_updated_at": candidate["updated_at"]}
     assert client.post(path, json=body).status_code == 401
@@ -287,7 +297,7 @@ def test_transient_detail_failure_preserves_enrichment_and_publication(review_cl
     )
     _upsert_item(session, source, complete)
     session.commit()
-    candidate = client.get("/api/v1/admin/candidates", headers=headers).json()[0]
+    candidate = first_candidate(client, headers)
     path = f"/api/v1/admin/candidates/{candidate['id']}/approve"
     assert client.post(path, json=approval(candidate), headers=headers).status_code == 200
     failure = replace(listing, facts={"enrichment": {"detail_status": "unavailable"}})

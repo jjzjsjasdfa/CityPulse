@@ -3,11 +3,15 @@ import { signalColors } from '../theme';
 import { directionWeights, type GlowState } from './guidance';
 import type { MapSize } from './geo';
 
+/** Converts a hex color string to numeric RGB channels. */
 const rgb = (hex: string) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
 const palette = Object.fromEntries(Object.entries(signalColors).map(([key, color]) => [key, rgb(color)])) as Record<EventCategory, number[]>;
+/** Restricts `n` to the 0..1 range. */
 const clamp = (n: number) => Math.max(0, Math.min(1, n));
+/** Divides viewport `size` into drawable polygons around the outer ribbon. */
 export function ribbonGeometry(size: MapSize) {
   const depth = 24, steps = 8;
+  /** Returns a point at fraction `t` along `side`, moved inward by `inset`. */
   const edge = (side: number, t: number, inset: number) => {
     const w = size.width - inset * 2, h = size.height - inset * 2;
     return side === 0 ? { x: inset + w * t, y: inset } : side === 1 ? { x: size.width - inset, y: inset + h * t } :
@@ -21,6 +25,10 @@ export function ribbonGeometry(size: MapSize) {
   });
 }
 
+/**
+ * Blends `glows` for one ribbon sample at `x`,`y` and perimeter progress `t`.
+ * `seconds`, `intro`, `categories`, and `reduced` control animation and startup colors.
+ */
 export function ribbonColor(x: number, y: number, t: number, size: MapSize, glows: GlowState[], seconds: number,
   intro: number, categories: EventCategory[], reduced = false) {
   if (!categories.length) intro = 0;

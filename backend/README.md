@@ -21,13 +21,37 @@ python -m uvicorn app.main:app --reload
 
 Docker startup runs migrations and `app.bootstrap`, then serves the API. Bootstrap
 attempts the default Showstart import and logs failures. `INGESTION_ON_STARTUP=false`
-disables that attempt; manual ingestion remains available. There are no seeded
-accounts or events. The administrator CLI never changes an existing account.
+disables that attempt; manual ingestion remains available. No accounts or test events
+are seeded automatically. The administrator CLI never changes an existing account.
+
+## Manual 2027 map seed
+
+`app.seed_map` inserts 64 explicitly fictional, published events around 16 Changsha
+locations, covering all eight categories, four seasons, overlapping/nearby markers,
+and announced/on-sale/sold-out/postponed states. All event and metadata dates are in
+2027. Coordinates are approximate WGS84 test positions, not real event locations.
+The script skips existing seed slugs and commits new events with status history in
+one transaction. It does not modify real events or call ingestion.
+
+From the repository root, with the API container running:
+
+```sh
+# Copy the script into an existing container without rebuilding/restarting it.
+docker compose cp backend/app/seed_map.py api:/app/app/seed_map.py
+docker compose exec api python -m app.seed_map --dry-run
+docker compose exec api python -m app.seed_map
+```
+
+For local Python, run `python -m app.seed_map` from `backend` using the intended
+`DATABASE_URL`. This is manual-only: neither build nor startup invokes the seed.
+Open the map around Changsha without a restrictive date filter to see the events.
+Publication timestamps are also in 2027, so these fixtures do not simulate current
+nearby-new-event alerts before 2027. The `--dry-run` option does not access the DB.
 
 ## Endpoints
 
 Public routers live in `app/api/routes`; admin routers live in
-`app/api/routes/admin/{events,candidates,corrections}.py`. Shared event mutations
+`app/api/routes/admin/{events,candidates,corrections,users}.py`. Shared event mutations
 live in `app/services/events.py`, with the calling route owning the transaction.
 See [the architecture guide](../docs/BACKEND_STRUCTURE.md) for the responsibility map.
 
@@ -37,17 +61,25 @@ See [the architecture guide](../docs/BACKEND_STRUCTURE.md) for the responsibilit
 | POST | `/auth/login` | Email/password; returns bearer token, expiry and user |
 | GET | `/auth/me` | Current active session |
 | POST | `/auth/logout` | Revoke current session |
-| GET | `/admin/candidates?status=pending&offset=0&limit=20` | Admin only |
+| GET | `/admin/candidates?status=pending&offset=0&limit=20` | Admin; lightweight review queue summaries |
+| GET | `/admin/candidates/{id}` | Admin; current complete candidate detail |
 | POST | `/admin/candidates/{id}/approve` | Admin; complete verified event facts |
 | POST | `/admin/candidates/{id}/reject` | Admin; required rejection reason |
 | POST | `/admin/candidates/{id}/enrich` | Admin; refresh a pending candidate's details/location |
 | GET | `/events`, `/events/map`, `/events/{id}` | Public approved events |
 | GET | `/admin/candidates/{id}/comparison` | Admin; source vs last public fields |
-| GET | `/admin/events`, `/admin/events/{id}` | Admin; includes unpublished events |
+| GET | `/admin/events`, `/admin/events/{id}` | Admin; summary list and current complete event detail |
+| POST | `/admin/events` | Admin; manually create a reviewed event |
 | PUT | `/admin/events/{id}` | Admin; complete replacement of editable fields, timestamp and note |
+| POST | `/admin/events/{id}/archive`, `/restore` | Admin; reversible removal without erasing audit data |
 | GET | `/admin/events/{id}/revisions` | Admin; paginated before/after audit |
+| GET, POST | `/admin/users` | Admin; paginated summary search and account creation |
+| GET, PUT | `/admin/users/{id}` | Admin; inspect or change role/status |
+| POST | `/admin/users/{id}/revoke-sessions` | Admin; revoke every active login |
+| GET | `/admin/users/{id}/revisions` | Admin; account administration audit |
 | POST | `/corrections` | Submit a report about a public event |
-| GET | `/admin/corrections?status=pending` | Admin; paginated correction inbox |
+| GET | `/admin/corrections?status=pending` | Admin; paginated correction summaries without private contact details |
+| GET | `/admin/corrections/{id}` | Admin; current complete correction detail |
 | POST | `/admin/corrections/{id}/review` | Admin; reviewing, accepted or rejected |
 
 `GET /events` accepts `q`, `when=any|today|weekend`, `time_scope=upcoming|past`,
@@ -61,6 +93,11 @@ plus all editable event fields. Correction review requires its own
 is accepted only with status `accepted`, and has the same event update contract.
 Both records and the edit audit commit atomically. Internal notes and report contact
 details are not copied into the public status timeline.
+
+Archived events are excluded from every public event endpoint. Restoring an event
+keeps it unpublished until an administrator explicitly reviews and republishes it.
+User administration prevents self-demotion/self-disable and preserves at least one
+active administrator. Disabling an account also revokes its active sessions.
 
 Both decisions require `expected_updated_at` from the candidate response, plus a
 review note. Approval requires timezone-aware start/end timestamps, a valid time
@@ -81,7 +118,6 @@ Showstart remains a non-official third-party source. Reviewers must check the
 organizer/venue source and enter its URL in the review form. The original Showstart
 URL remains linked as source evidence; the verified URL is shown separately.
 
-Use `python -m app.ingestion hunan-museum` to select the other available adapter.
 See [adapter documentation](app/ingestion/README.md).
 
 ### Detail and venue enrichment

@@ -22,4 +22,3 @@ def list_categories() -> CategoriesResponse:
     return CategoriesResponse(
         data=[CategoryOption(value=value, label=label) for value, label in CATEGORY_LABELS.items()]
     )
-

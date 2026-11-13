@@ -1,3 +1,4 @@
+import { Float } from 'react-native/Libraries/Types/CodegenTypes';
 import type { EventSummary, MapEvent } from '../api/types';
 
 export interface MapBounds { west: number; south: number; east: number; north: number }
@@ -11,10 +12,12 @@ export interface MapRegion {
 export interface MapSession { region?: MapRegion; located: boolean; introPlayed?: boolean; hiddenCategories?: import('../api/types').EventCategory[] }
 export type MapLevel = 'saved' | 'dots' | 'categories' | 'names';
 export interface MapDetail { category: number; name: number; unsaved: number }
+/** Smoothly interpolates `value` from 0 to 1 between `low` and `high`. */
 const smooth = (low: number, high: number, value: number) => {
   const t = Math.max(0, Math.min(1, (value - low) / (high - low)));
   return t * t * (3 - 2 * t);
 };
+/** Converts viewport width in kilometers to marker-detail opacity levels. */
 export function mapDetail(widthKm: number): MapDetail {
   const name = 1 - smooth(2, 3, widthKm);
   return { name, category: (1 - smooth(9, 13, widthKm)) * (1 - name),
@@ -40,6 +43,7 @@ export const TIME_SIZES = [
   { key: 'later', label: '更久', diameter: 12 },
 ] as const;
 
+/** Reduces an event summary to the fields needed by the map. */
 export function toMapPoint(event: EventSummary): MapEvent {
   return {
     id: event.id, name: event.name, category: event.category, status: event.status,
@@ -48,8 +52,10 @@ export function toMapPoint(event: EventSummary): MapEvent {
   };
 }
 
+/** Wraps `longitude` into the -180..180 range. */
 export const normalizeLongitude = (longitude: number) => ((longitude + 180) % 360 + 360) % 360 - 180;
 
+/** Converts camera `region` into west/south/east/north query bounds. */
 export function boundsFromRegion(region: MapRegion): MapBounds {
   return {
     west: region.longitudeDelta >= 360 ? -180 : normalizeLongitude(region.longitude - region.longitudeDelta / 2),
@@ -59,14 +65,17 @@ export function boundsFromRegion(region: MapRegion): MapBounds {
   };
 }
 
+/** Returns the longitude width of `bounds`, including date-line crossings. */
 export function longitudeSpan(bounds: MapBounds): number {
   return bounds.east >= bounds.west ? bounds.east - bounds.west : 360 + bounds.east - bounds.west;
 }
 
+/** Estimates the physical east-west width of `bounds` in kilometers. */
 export function viewportWidthKm(bounds: MapBounds): number {
   return longitudeSpan(bounds) * 111.32 * Math.cos(((bounds.north + bounds.south) / 2) * Math.PI / 180);
 }
 
+/** Selects the marker display level appropriate for the current `bounds`. */
 export function getMapLevel(bounds: MapBounds): MapLevel {
   const width = viewportWidthKm(bounds);
   if (width >= 40 || longitudeSpan(bounds) > 20 || bounds.north - bounds.south > 30) return 'saved';
@@ -75,6 +84,7 @@ export function getMapLevel(bounds: MapBounds): MapLevel {
   return 'names';
 }
 
+/** Tests whether `point` lies inside `bounds`, including date-line crossings. */
 export function isInBounds(point: Pick<MapEvent, 'latitude' | 'longitude'>, bounds: MapBounds): boolean {
   const longitudeInside = bounds.west <= bounds.east
     ? point.longitude >= bounds.west && point.longitude <= bounds.east
@@ -82,8 +92,10 @@ export function isInBounds(point: Pick<MapEvent, 'latitude' | 'longitude'>, boun
   return longitudeInside && point.latitude >= bounds.south && point.latitude <= bounds.north;
 }
 
-// Half-open active interval: an event stops being live exactly at its end time.
-// Invalid dates and cancelled/postponed events must never look live.
+/**
+ * Selects a marker size from `point` timing/status at timestamp `now`.
+ * The active interval is half-open, and invalid/inactive events use the smallest size.
+ */
 export function getTimeSize(point: Pick<MapEvent, 'starts_at' | 'ends_at' | 'status'>, now = Date.now()) {
   const start = Date.parse(point.starts_at);
   const end = Date.parse(point.ends_at);
@@ -98,6 +110,7 @@ export function getTimeSize(point: Pick<MapEvent, 'starts_at' | 'ends_at' | 'sta
   return TIME_SIZES[5];
 }
 
+/** Filters `points` to visible, active events, or saved-only events at far zoom. */
 export function visibleMapPoints(
   points: MapEvent[], bounds: MapBounds, savedIds: ReadonlySet<string>, now = Date.now(),
 ): MapEvent[] {
@@ -106,7 +119,7 @@ export function visibleMapPoints(
     (savedOnly ? savedIds.has(point.id) : Date.parse(point.ends_at) > now && point.status !== 'ended'));
 }
 
-// Split date-line crossings so each PostGIS envelope has west < east.
+/** Splits date-line-crossing `bounds` into valid PostGIS query envelopes. */
 export function queryBounds(bounds: MapBounds): MapBounds[] {
   if (bounds.west < bounds.east) return [bounds];
   return [{ ...bounds, east: 180 }, { ...bounds, west: -180 }].filter((part) => part.west < part.east);

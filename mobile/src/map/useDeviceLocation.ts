@@ -1,23 +1,20 @@
 import { useCallback, useEffect, useState } from 'react';
 import { AppState } from 'react-native';
 import { watchLocation, type Position, type LocationFailure } from './locationProvider';
-import { DEMO_LOCATION, DEMO_MODE } from '../demo';
 
 export type LocationStatus = 'locating' | 'ready' | LocationFailure;
+/** Watches foreground device location and returns position, status, and a retry action. */
 export function useDeviceLocation() {
   const [position, setPosition] = useState<Position | null>(null);
   const [status, setStatus] = useState<LocationStatus>('locating');
   const [retry, setRetry] = useState(0);
   useEffect(() => {
-    if (DEMO_MODE) {
-      setPosition({ ...DEMO_LOCATION, accuracy: 0, timestamp: Date.now() });
-      setStatus('ready');
-      return;
-    }
     let generation = 0;
     let stop: (() => void) | undefined;
     let timeout: ReturnType<typeof setTimeout> | undefined;
+    /** Stops the current native/browser watch and invalidates its callbacks. */
     const pause = () => { generation++; stop?.(); stop = undefined; clearTimeout(timeout); };
+    /** Starts a new location watch and maps provider callbacks into hook state. */
     const start = async () => {
       pause();
       const current = generation;

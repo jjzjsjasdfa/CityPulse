@@ -86,7 +86,24 @@ class IngestionItem:
         return payload
 
 
+class DiscoveryAdapter(Protocol):
+    source: SourceSpec
+    empty_result_message: str
+
+    def discover(self, *, limit: int = 20) -> list[IngestionItem]: ...
+
+
+class ItemEnricher(Protocol):
+    def enrich(self, item: IngestionItem) -> IngestionItem: ...
+
+
+class Closeable(Protocol):
+    def close(self) -> None: ...
+
+
 class SourceAdapter(Protocol):
+    """Runnable source job retained as the runner-facing interface."""
+
     source: SourceSpec
 
     def fetch(self, *, limit: int = 20) -> list[IngestionItem]: ...

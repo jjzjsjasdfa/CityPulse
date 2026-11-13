@@ -4,6 +4,7 @@ import { getTimeSize, type MapRegion } from './presentation';
 
 // All dots remain visible. Reserve room for labels in a stable priority order;
 // zooming further in reveals names that did not fit in a dense cluster.
+/** Returns IDs whose labels fit without overlapping inside the current map viewport. */
 export function labelIds(points: MapEvent[], region: MapRegion, size: MapSize,
   saved: ReadonlySet<string>, width: number, names: boolean, now: number) {
   const accepted = new Set<string>();

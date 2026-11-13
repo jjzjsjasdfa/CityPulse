@@ -1,23 +1,19 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from datetime import datetime
 from html.parser import HTMLParser
 from urllib.parse import urljoin, urlsplit
 from zoneinfo import ZoneInfo
 
-import httpx
-
-from app.ingestion.common import HTML_VOID_ELEMENTS, assert_robots_allowed, normalize_text
-from app.ingestion.enrichment_types import EnrichmentInfo
-from app.ingestion.places import VenueLookup
-from app.ingestion.showstart_detail import parse_showstart_detail
+from app.ingestion.common import HTML_VOID_ELEMENTS, normalize_text
+from app.ingestion.listing import HtmlListingSource
+from app.ingestion.showstart_detail import SHOWSTART_EVENT_PATH
 from app.ingestion.types import IngestionItem, SourceSpec
 from app.models import EventCategory, SourceLevel
 
 SHANGHAI = ZoneInfo("Asia/Shanghai")
-EVENT_PATH = re.compile(r"^/event/(?P<id>\d+)$")
 CARD_FIELDS = {"name", "price", "time", "addr"}
 
 
@@ -43,7 +39,7 @@ class _ShowStartParser(HTMLParser):
         self.depth += 1
         attributes = dict(attrs)
         href = attributes.get("href")
-        if self.card is None and tag == "a" and href and EVENT_PATH.match(href):
+        if self.card is None and tag == "a" and href and SHOWSTART_EVENT_PATH.match(href):
             self.card = _Card(href=href, depth=self.depth)
         elif self.card is not None and tag == "p":
             classes = set((attributes.get("class") or "").split())
@@ -129,73 +125,17 @@ def parse_showstart_venue(html: str, base_url: str) -> list[IngestionItem]:
     return items
 
 
-class ShowStartVenueAdapter:
-    source = SourceSpec(
+SHOWSTART = HtmlListingSource(
+    source=SourceSpec(
         key="showstart-changsha-concert-hall",
         name="秀动：长沙音乐厅",
         url="https://www.showstart.com/venue/1344034",
         level=SourceLevel.lead,
         is_official=False,
         reliability_score=0.7,
-    )
-
-    def __init__(
-        self, *, user_agent: str, timeout_seconds: float = 20, amap_api_key: str | None = None
-    ) -> None:
-        if not user_agent.strip() or any(
-            placeholder in user_agent
-            for placeholder in ("contact-required", "example.com", ".invalid")
-        ):
-            # Old setup files used a contact placeholder. Never send a fictional
-            # contact, and do not require a map account to read public event facts.
-            user_agent = "CityPulse/0.1"
-        self.user_agent = user_agent
-        self.client = httpx.Client(
-            headers={"User-Agent": user_agent},
-            timeout=timeout_seconds,
-            follow_redirects=False,
-        )
-        self.lookup = VenueLookup(amap_api_key, self.client)
-
-    def enrich(self, item: IngestionItem) -> IngestionItem:
-        parts = urlsplit(item.canonical_url)
-        if (
-            parts.scheme != "https"
-            or parts.netloc != "www.showstart.com"
-            or not EVENT_PATH.fullmatch(parts.path)
-            or parts.query
-            or parts.fragment
-        ):
-            raise ValueError("Only canonical Showstart event URLs are supported")
-        try:
-            assert_robots_allowed(self.client, item.canonical_url, self.user_agent)
-            response = self.client.get(item.canonical_url)
-            response.raise_for_status()
-            item = parse_showstart_detail(response.text, item)
-        except (httpx.HTTPError, ValueError, RuntimeError):
-            # Leave listing facts intact; never guess from ticket sale dates or another event.
-            info = EnrichmentInfo.model_validate(item.facts.get("enrichment", {}))
-            info.detail_status = "unavailable"
-            info.warnings = ["暂时无法读取详情页，已保留此前采集的字段，请稍后重试。"]
-            item = replace(item, facts={**item.facts, "enrichment": info.model_dump()})
-        return self.lookup.enrich(item)
-
-    def fetch(self, *, limit: int = 20) -> list[IngestionItem]:
-        assert_robots_allowed(self.client, self.source.url, self.user_agent)
-        response = self.client.get(self.source.url)
-        response.raise_for_status()
-        items = parse_showstart_venue(response.text, self.source.url)[:limit]
-        if not items:
-            raise RuntimeError(
-                "ShowStart returned no recognizable venue events; its layout may have changed."
-            )
-        return [self.enrich(item) for item in items]
-
-    def close(self) -> None:
-        self.client.close()
-
-    def __enter__(self) -> ShowStartVenueAdapter:
-        return self
-
-    def __exit__(self, *_args: object) -> None:
-        self.close()
+    ),
+    parser=parse_showstart_venue,
+    empty_result_message=(
+        "ShowStart returned no recognizable venue events; its layout may have changed."
+    ),
+)

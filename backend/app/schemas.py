@@ -61,6 +61,17 @@ class AdminCandidate(BaseModel):
     review_note: str | None
 
 
+class AdminCandidateSummary(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: UUID
+    name: str
+    category: EventCategory
+    venue_name: str | None
+    price: str | None
+    starts_at: datetime | None
+    review_status: CandidateReviewStatus
+
+
 class EventFields(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True, allow_inf_nan=False)
     name: str = Field(min_length=1, max_length=200)
@@ -100,10 +111,44 @@ class AdminEventUpdate(ReviewedEventFields):
     is_published: bool
 
 
+class AdminEventCreate(EventFields):
+    review_note: str = Field(min_length=1, max_length=1000)
+    is_published: bool = False
+
+
+class AdminEventAction(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    expected_updated_at: AwareDatetime
+    note: str = Field(min_length=1, max_length=1000)
+
+
 class AdminEventDetail(EventFields):
     id: UUID
     updated_at: datetime
     is_published: bool
+    archived_at: datetime | None
+
+
+class AdminEventSummary(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: UUID
+    name: str
+    status: EventStatus
+    starts_at: datetime
+    is_published: bool
+    archived_at: datetime | None
+
+
+class OffsetPageMeta(BaseModel):
+    offset: int
+    limit: int
+    total: int
+    has_next: bool
+
+
+class AdminEventPage(BaseModel):
+    data: list[AdminEventSummary]
+    meta: OffsetPageMeta
 
 
 class FieldChange(BaseModel):
@@ -128,6 +173,53 @@ class AdminEventRevision(BaseModel):
     created_at: datetime
 
 
+class AdminUserDetail(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: UUID
+    email: str
+    role: UserRole
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+
+
+class AdminUserSummary(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: UUID
+    email: str
+    role: UserRole
+    is_active: bool
+    created_at: datetime
+
+
+class AdminUserPage(BaseModel):
+    data: list[AdminUserSummary]
+    meta: OffsetPageMeta
+
+
+class AdminUserCreate(Credentials):
+    role: UserRole = UserRole.regular
+
+
+class AdminUserUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    expected_updated_at: AwareDatetime
+    role: UserRole
+    is_active: bool
+    note: str = Field(min_length=1, max_length=1000)
+
+
+class AdminUserRevision(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: UUID
+    actor_id: UUID
+    action: str
+    note: str
+    before: dict
+    after: dict
+    created_at: datetime
+
+
 class AdminCorrection(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: UUID
@@ -141,6 +233,14 @@ class AdminCorrection(BaseModel):
     created_at: datetime
     reviewed_by: UUID | None
     resolution_note: str | None
+
+
+class AdminCorrectionSummary(BaseModel):
+    id: UUID
+    kind: str
+    message_preview: str
+    status: CorrectionStatus
+    created_at: datetime
 
 
 class CorrectionReview(BaseModel):
@@ -193,7 +293,6 @@ class EventSummary(BaseModel):
     confidence: float
     attributes: list[str]
     is_ad: bool
-    is_demo: bool
     is_new: bool
     is_ending_soon: bool
 

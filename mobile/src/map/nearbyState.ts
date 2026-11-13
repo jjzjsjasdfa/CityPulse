@@ -2,8 +2,10 @@ import type { NearbyEvent } from '../api/types';
 
 export interface NearbyState { watermark: string | null; pending: NearbyEvent[]; seen: string[]; unread: NearbyEvent[]; viewed: string[] }
 export const EMPTY_NEARBY: NearbyState = { watermark: null, pending: [], seen: [], unread: [], viewed: [] };
+/** Builds the stable version key for a nearby event publication. */
 export const updateKey = (event: NearbyEvent) => `${event.id}:${event.published_at}`;
 
+/** Merges `incoming` events into persisted `state` at server watermark `checkedAt`. */
 export function mergeNearby(state: NearbyState, incoming: NearbyEvent[], checkedAt: string, now: number): NearbyState {
   const seen = new Set(state.seen);
   const pending = new Map(state.pending.map((event) => [event.id, event]));
@@ -15,12 +17,14 @@ export function mergeNearby(state: NearbyState, incoming: NearbyEvent[], checked
     Date.parse(event.ends_at) > now && !['ended', 'cancelled', 'postponed'].includes(event.status)) };
 }
 
+/** Marks nearby event `id` as viewed and removes its pending/unread indicators. */
 export function viewNearby(state: NearbyState, id: string): NearbyState {
   const viewed = new Set(state.viewed);
   state.unread.filter((event) => event.id === id).forEach((event) => viewed.add(updateKey(event)));
   return { ...acknowledgeNearby(state, [id]), unread: state.unread.filter((event) => event.id !== id), viewed: [...viewed].slice(-4000) };
 }
 
+/** Marks pending event `ids` as seen so overlapping polls do not alert again. */
 export function acknowledgeNearby(state: NearbyState, ids: string[]): NearbyState {
   const idSet = new Set(ids);
   const seen = new Set(state.seen);
@@ -29,6 +33,7 @@ export function acknowledgeNearby(state: NearbyState, ids: string[]): NearbyStat
   return { ...state, seen: [...seen].slice(-4000), pending: state.pending.filter((event) => !idSet.has(event.id)) };
 }
 
+/** Safely parses stored JSON `value`, discarding malformed nearby-state entries. */
 export function readNearbyState(value: string | null): NearbyState {
   try {
     const data = JSON.parse(value ?? '{}');

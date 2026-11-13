@@ -95,10 +95,6 @@ npx expo export --platform web
 npm run preview:map
 ```
 
-临时数据和真实手势集成测试见 [DEMO_DATA.md](DEMO_DATA.md)。
-运行 `npm run smoke:demo`，默认连接 `http://localhost:18081` 和本地测试接口，
-可用 `CHROME_PATH`、`PREVIEW_URL` 覆盖。截图写入忽略的 `mobile/artifacts/`。
-
 覆盖：六档大小、边界时刻、四层缩放、超过 500 点的分页、迟到请求取消、收藏重启恢复、
 时间自动更新、320/390 px 标签尺寸和离线提示。
 

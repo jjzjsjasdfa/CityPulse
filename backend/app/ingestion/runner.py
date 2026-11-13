@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 from sqlmodel import Session, select
 
 from app.core.database import engine
-from app.ingestion.registry import adapter_keys, build_adapter
+from app.ingestion.registry import adapter_keys, build_job
 from app.ingestion.types import IngestionItem, SourceSpec
 from app.models import (
     CandidateReviewStatus,
@@ -241,9 +241,9 @@ def persist(items: list[IngestionItem], spec: SourceSpec) -> dict[str, int | str
 
 
 def run(*, source_key: str, limit: int, dry_run: bool) -> dict[str, object]:
-    adapter = build_adapter(source_key)
-    with adapter:
-        items = adapter.fetch(limit=limit)
+    job = build_job(source_key)
+    with job:
+        items = job.fetch(limit=limit)
     if dry_run:
         return {
             "dry_run": True,
@@ -258,7 +258,7 @@ def run(*, source_key: str, limit: int, dry_run: bool) -> dict[str, object]:
                 for item in items
             ],
         }
-    return {"source": source_key, **persist(items, adapter.source)}
+    return {"source": source_key, **persist(items, job.source)}
 
 
 def main() -> None:

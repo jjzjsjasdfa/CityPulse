@@ -5,6 +5,7 @@ import type { CandidateComparison } from '../api/types';
 import { eventFields } from './EventFields';
 import { colors } from '../theme';
 
+/** Loads and displays field changes for `candidateId`; `version` triggers a fresh comparison. */
 export function SourceComparison({ candidateId, version }: { candidateId: string; version: string }) {
   const [result, setResult] = useState<CandidateComparison | null>(null);
   const [error, setError] = useState('');

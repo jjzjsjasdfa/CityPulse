@@ -3,7 +3,12 @@ import { useEffect, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { colors } from '../theme';
 
+/** Builds a per-user, per-record storage key for an admin review draft. */
 export const draftKey = (userId: string, recordId: string) => `@citypulse/review-draft/${userId}/${recordId}`;
+/**
+ * Saves and restores local form `value` under `storageKey`.
+ * `version` prevents stale drafts from overwriting newer data; `onRestore` applies a draft.
+ */
 export function DraftControls<T>({ storageKey, version, value, onRestore, disabled }: {
   storageKey: string; version: string; value: T; onRestore: (value: T) => void; disabled?: boolean;
 }) {

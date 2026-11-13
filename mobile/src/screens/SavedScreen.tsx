@@ -1,4 +1,4 @@
-import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { FlatList, StyleSheet, Text, View } from 'react-native';
 
 import type { EventSummary } from '../api/types';
 import { EventCard } from '../components/EventCard';
@@ -9,10 +9,10 @@ interface Props {
   savedIds: Set<string>;
   onSelect: (event: EventSummary) => void;
   onToggleSaved: (id: string) => void;
-  onSettings: () => void;
 }
 
-export function SavedScreen({ events, savedIds, onSelect, onToggleSaved, onSettings }: Props) {
+/** Shows `events` whose IDs are in `savedIds` and forwards open/remove actions. */
+export function SavedScreen({ events, savedIds, onSelect, onToggleSaved }: Props) {
   const saved = events.filter((event) => savedIds.has(event.id));
   return (
     <FlatList
@@ -21,8 +21,7 @@ export function SavedScreen({ events, savedIds, onSelect, onToggleSaved, onSetti
       contentContainerStyle={styles.content}
       ListHeaderComponent={
         <View style={styles.header}>
-          <View style={{flexDirection:'row',alignItems:'center',justifyContent:'space-between'}}><Text style={styles.title}>我的</Text>
-            <Pressable accessibilityRole="button" accessibilityLabel="设置" onPress={onSettings} style={{padding:12}}><Text style={{fontSize:25,color:colors.ink}}>⚙</Text></Pressable></View>
+          <Text style={styles.title}>我的</Text>
           <Text style={{fontSize:20,fontWeight:'700',color:colors.ink,marginTop:22}}>我的收藏</Text>
           <Text style={styles.subtitle}>收藏只保存在这台设备上，你可以随时取消。</Text>
         </View>

@@ -6,9 +6,15 @@ import { categoryColors, categoryLabels, colors } from '../theme';
 import { getTimeSize, type MapDetail, type MapLevel } from './presentation';
 import { ActivityHalo } from './ActivityHalo';
 
+/** Chooses a readable marker-label width from the available `screenWidth`. */
 export const markerLabelWidth = (screenWidth: number) => Math.min(144, Math.floor(screenWidth * 0.38));
+/** Returns the fixed marker view height used for every zoom `level`. */
 export const markerHeight = (_level: MapLevel) => 110;
 
+/**
+ * Renders map `point` at zoom `level` and time `now` within label `width`.
+ * Remaining props control saved/detail/label interaction and unread halo state.
+ */
 export function EventMarker({ point, level, now, width, saved, detail, labelVisible = true, interactive = false, unread = false, haloUntil = 0 }: {
   point: MapEvent; level: MapLevel; now: number; width: number; saved: boolean; detail?: MapDetail; labelVisible?: boolean; interactive?: boolean; unread?: boolean; haloUntil?: number;
 }) {

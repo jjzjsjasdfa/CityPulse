@@ -5,9 +5,12 @@ import { distanceKm, NEARBY_RADIUS_KM, projectPoint, type Coordinate, type MapSi
 export const DIRECTIONS = ['北', '东北', '东', '东南', '南', '西南', '西', '西北'] as const;
 export interface GlowTarget { key: string; direction: number; category: EventCategory; strength: number; proximity: number }
 export interface GlowState extends GlowTarget { impulse: number; phase: number; multi: number }
+/** Converts an eight-way direction index into a clockwise angle in radians. */
 export const directionAngle = (direction: number) => direction * Math.PI / 4;
+/** Restricts `n` to the inclusive `min`..`max` range. */
 const clamp = (n: number, min = 0, max = 1) => Math.max(min, Math.min(max, n));
 
+/** Blends vector `x`,`y` across its two nearest eight-way directions. */
 export function directionWeights(x: number, y: number) {
   const sector = ((Math.atan2(x, -y) / (Math.PI / 4)) + 8) % 8;
   const first = Math.floor(sector);
@@ -16,11 +19,16 @@ export function directionWeights(x: number, y: number) {
   return [{ direction: first, weight: 1 - mix }, { direction: (first + 1) % 8, weight: mix }];
 }
 
+/** Tests whether screen point `x`,`y` is safely visible in the map's central area. */
 export function isInCentralArea(x: number, y: number, size: MapSize, topInset = 120) {
   return x >= size.width * 0.16 && x <= size.width * 0.84 &&
     y >= Math.max(topInset, size.height * 0.18) && y <= size.height - Math.max(100, size.height * 0.18);
 }
 
+/**
+ * Builds edge-glow targets for `events` around `position` using the camera `region`/`size`.
+ * Remaining arguments control time, safe area, acknowledgement, rendered IDs, and radius.
+ */
 export function guidanceTargets(events: NearbyEvent[], position: Coordinate | null, region: MapRegion,
   size: MapSize, now: number, topInset = 120, canAcknowledge = true, renderedIds?: ReadonlySet<string>, radius = NEARBY_RADIUS_KM, distances?: ReadonlyMap<string, number>) {
   const targets = new Map<string, GlowTarget>();
@@ -48,11 +56,13 @@ export function guidanceTargets(events: NearbyEvent[], position: Coordinate | nu
   return { targets: [...targets.values()], central };
 }
 
+/** Animates `previous` glow state toward `targets` over `dt` seconds. */
 export function advanceGlows(previous: GlowState[], targets: GlowTarget[], dt: number): GlowState[] {
   const elapsed = clamp(dt, 0, 0.1);
   const wanted = new Map(targets.map((target) => [target.key, target]));
   const groups = new Map<number, string[]>();
   for (const target of targets) groups.set(target.direction, [...(groups.get(target.direction) ?? []), target.category].sort());
+  /** Offsets categories sharing one direction so their pulses remain distinguishable. */
   const rhythm = (glow: GlowTarget) => {
     const group = groups.get(glow.direction) ?? [];
     return { phase: group.length ? Math.max(0, group.indexOf(glow.category)) / group.length * Math.PI * 2 : 0,
@@ -78,12 +88,14 @@ export function advanceGlows(previous: GlowState[], targets: GlowTarget[], dt: n
   return result;
 }
 
+/** Finds where a ray at `angle` meets the edge of viewport `size`. */
 export function edgePoint(angle: number, size: MapSize) {
   const dx = Math.sin(angle), dy = -Math.cos(angle);
   const scale = 1 / Math.max(Math.abs(dx), Math.abs(dy));
   return { x: size.width / 2 * (1 + dx * scale), y: size.height / 2 * (1 + dy * scale) };
 }
 
+/** Converts animated `glows` into drawable edge ellipses for the current time and size. */
 export function glowLobes(glows: GlowState[], seconds: number, size: MapSize, reducedMotion = false) {
   return glows.flatMap((glow) => {
     const wave = reducedMotion ? 0 : seconds * 1.7 + glow.phase + glow.direction * 0.24;

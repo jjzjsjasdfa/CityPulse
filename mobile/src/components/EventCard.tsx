@@ -10,6 +10,7 @@ interface Props {
   onToggleSaved: () => void;
 }
 
+/** Displays an event summary; callbacks open `event` or toggle its `saved` state. */
 export function EventCard({ event, saved, onPress, onToggleSaved }: Props) {
   const accent = categoryColors[event.category];
 
@@ -27,20 +28,17 @@ export function EventCard({ event, saved, onPress, onToggleSaved }: Props) {
           <Text numberOfLines={3} style={styles.artTitle}>
             {event.name}
           </Text>
-          <Text style={styles.artDistrict}>{event.location.district}</Text>
+          <Text style={styles.artDistrict}>{event.location.district} - {event.location.venue_name}</Text>
         </View>
         <View style={styles.body}>
-          <View style={styles.badgeRow}>
+          {/* <View style={styles.badgeRow}>
             {event.is_new && <Text style={styles.newBadge}>刚上新</Text>}
             {event.is_ending_soon && <Text style={styles.endingBadge}>快结束</Text>}
-          </View>
+          </View> */}
           <Text style={styles.date}>{formatDate(event.starts_at)}</Text>
           {event.price && <Text style={styles.price}>{event.price}</Text>}
           <Text numberOfLines={2} style={styles.summary}>
             {event.summary}
-          </Text>
-          <Text numberOfLines={1} style={styles.location}>
-            {event.location.venue_name}
           </Text>
         </View>
       </Pressable>
@@ -93,7 +91,7 @@ const styles = StyleSheet.create({
   artCategory: { color: colors.white, fontSize: 13, fontWeight: '800', letterSpacing: 2 },
   artTitle: { color: colors.white, fontSize: 27, lineHeight: 33, fontWeight: '900', maxWidth: '82%' },
   artDistrict: { color: 'rgba(255,255,255,0.88)', fontSize: 13, fontWeight: '700' },
-  body: { padding: 18 },
+  body: { paddingHorizontal: 18, paddingTop: 14 },
   badgeRow: { flexDirection: 'row', gap: 7, minHeight: 22 },
   newBadge: {
     alignSelf: 'flex-start',
@@ -115,7 +113,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     fontSize: 11,
   },
-  date: { color: colors.ink, fontWeight: '900', fontSize: 18, marginTop: 8 },
+  date: { color: colors.ink, fontWeight: '900', fontSize: 18 },
   price: { color: colors.orange, fontWeight: '900', fontSize: 15, marginTop: 6 },
   summary: { color: colors.inkMuted, fontSize: 14, lineHeight: 21, marginTop: 8 },
   location: { color: colors.ink, fontSize: 13, fontWeight: '700', marginTop: 13 },

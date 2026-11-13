@@ -1,10 +1,12 @@
 import type { MapEvent, MapEventsResponse } from '../api/types';
 
+/** Throws an AbortError when optional request `signal` has been cancelled. */
 function checkAborted(signal?: AbortSignal) {
   // React Native's AbortController polyfill does not always expose throwIfAborted.
   if (signal?.aborted) throw Object.assign(new Error('地图请求已取消'), { name: 'AbortError' });
 }
 
+/** Fetches all offset pages, reports accumulated points through `onPage`, and supports cancellation. */
 export async function loadMapPages(
   fetchPage: (offset: number) => Promise<MapEventsResponse>,
   signal?: AbortSignal,

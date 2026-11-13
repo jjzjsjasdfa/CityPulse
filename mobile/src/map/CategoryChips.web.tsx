@@ -2,6 +2,7 @@ import { useRef } from 'react';
 import type { EventCategory } from '../api/types';
 import { categoryColors, categoryLabels } from '../theme';
 
+/** Renders draggable web category filters at `top`; `hidden` and `toggle` control selection. */
 export function CategoryChips({ shown, hidden, toggle, top }: { shown: boolean; hidden: ReadonlySet<EventCategory>; toggle: (category: EventCategory) => void; top: number }) {
   const drag=useRef({x:0,scroll:0,active:false,moved:false});
   return <div style={{position:'absolute',left:0,right:0,top,opacity:shown?1:0,transform:`translateY(${shown?0:-8}px)`,transition:'opacity 200ms, transform 200ms',pointerEvents:shown?'auto':'none'}}>

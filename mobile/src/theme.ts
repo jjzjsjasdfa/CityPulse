@@ -1,8 +1,11 @@
 import type { EventCategory, EventStatus } from './api/types';
 
+/** Shared visual tokens and display labels used by the mobile and web frontend. */
+
 export const colors = {
   ink: '#173232',
   inkMuted: '#59706D',
+  placeholder: '#879591',
   paper: '#F7F4EC',
   white: '#FFFDF8',
   line: '#DED9CC',
@@ -50,6 +53,7 @@ export const statusLabels: Record<EventStatus, string> = {
   ended: '已结束',
 };
 
+/** Formats ISO `value` in Shanghai time; `includeTime` controls whether hours are shown. */
 export const formatDate = (value: string, includeTime = true) =>
   new Intl.DateTimeFormat('zh-CN', {
     timeZone: 'Asia/Shanghai',

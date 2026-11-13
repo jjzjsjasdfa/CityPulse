@@ -26,6 +26,7 @@ interface Props {
   onToggleSaved: (id: string) => void;
 }
 
+/** Renders searchable, filterable `events`; action callbacks are provided by the app shell. */
 export function FeedScreen(props: Props) {
   const [search, setSearch] = useState(props.query);
   useEffect(() => setSearch(props.query), [props.query]);
@@ -52,7 +53,7 @@ export function FeedScreen(props: Props) {
           )}
           <View style={styles.filterWrap}>
             <View style={styles.searchRow}>
-              <TextInput accessibilityLabel="搜索活动" placeholder="搜索活动、场馆或关键词" value={search} onChangeText={setSearch}
+              <TextInput accessibilityLabel="搜索活动" placeholder="搜索活动、场馆或关键词" placeholderTextColor={colors.placeholder} value={search} onChangeText={setSearch}
                 returnKeyType="search" onSubmitEditing={() => props.onSearch(search.trim())} style={styles.searchInput} />
               <Pressable accessibilityRole="button" onPress={() => props.onSearch(search.trim())}><Text style={styles.searchButton}>搜索</Text></Pressable>
               {!!search && <Pressable accessibilityRole="button" onPress={() => { setSearch(''); props.onSearch(''); }}><Text style={styles.searchButton}>清除搜索</Text></Pressable>}
@@ -97,7 +98,7 @@ export function FeedScreen(props: Props) {
 
 const styles = StyleSheet.create({
   searchRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8, paddingHorizontal: 20, marginTop: 12 },
-  searchInput: { flex: 1, minWidth: 140, padding: 12, backgroundColor: colors.white, borderRadius: 10, borderWidth: 1, borderColor: colors.line },
+  searchInput: { flex: 1, minWidth: 140, padding: 12, color: colors.ink, backgroundColor: colors.white, borderRadius: 10, borderWidth: 1, borderColor: colors.line },
   searchButton: { color: colors.green, fontWeight: '700', padding: 8 },
   dateRow: { flexDirection: 'row', gap: 8, paddingHorizontal: 20, marginVertical: 10 },
   dateChip: { padding: 10, borderWidth: 1, borderColor: colors.line, borderRadius: 10 },
@@ -106,8 +107,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    paddingTop: 20,
-    paddingBottom: 18,
+    paddingVertical: 18,
   },
   eyebrow: { fontSize: 11, fontWeight: '900', color: colors.orange, letterSpacing: 1.8 },
   title: { color: colors.ink, fontSize: 38, lineHeight: 43, fontWeight: '900', marginTop: 8 },

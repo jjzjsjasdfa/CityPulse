@@ -3,6 +3,7 @@ import type { Coordinate } from './geo';
 
 export type Position = Coordinate & { accuracy: number | null; timestamp: number };
 export type LocationFailure = 'denied' | 'unavailable';
+/** Starts native foreground location updates and returns a function that stops the watch. */
 export async function watchLocation(
   onPosition: (point: Position) => void, onFailure: (reason: LocationFailure) => void,
 ): Promise<() => void> {
