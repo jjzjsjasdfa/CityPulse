@@ -9,7 +9,7 @@ from app.api.routes.auth import _attempts
 from app.core.database import get_session
 from app.core.security import hash_password
 from app.main import app
-from app.models import AuthSession, User, UserRevision, UserRole
+from app.models import AuthSession, NicknameChange, User, UserRevision, UserRole
 
 
 @pytest.fixture
@@ -18,7 +18,7 @@ def auth_client():
         "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
     )
     SQLModel.metadata.create_all(
-        engine, tables=[User.__table__, AuthSession.__table__, UserRevision.__table__]
+        engine, tables=[User.__table__, AuthSession.__table__, UserRevision.__table__, NicknameChange.__table__]
     )
     with Session(engine) as session:
         app.dependency_overrides[get_session] = lambda: session
@@ -27,6 +27,78 @@ def auth_client():
             yield client, session
     app.dependency_overrides.clear()
     engine.dispose()
+
+
+def test_persistent_session_renewal_and_device_logout(auth_client):
+    client, session = auth_client
+    credentials = {'email': 'remember@example.com', 'password': 'remember-this-test-password'}
+    client.post('/api/v1/auth/register', json=credentials)
+    first = client.post('/api/v1/auth/login', json=credentials).json()
+    second = client.post('/api/v1/auth/login', json=credentials).json()
+    from app.core.security import token_hash, aware_utc
+    record = session.get(AuthSession, token_hash(first['access_token']))
+    assert aware_utc(record.expires_at) > datetime.now(UTC) + timedelta(days=179)
+    record.expires_at = datetime.now(UTC) + timedelta(hours=1)
+    session.add(record)
+    session.commit()
+    headers = {'Authorization': 'Bearer ' + first['access_token']}
+    result = client.post('/api/v1/auth/session', headers=headers)
+    assert result.status_code == 200
+    assert result.headers['cache-control'] == 'no-store'
+    assert result.json()['access_token'] == first['access_token']
+    assert aware_utc(record.expires_at) > datetime.now(UTC) + timedelta(days=179)
+    assert client.post('/api/v1/auth/logout', headers=headers).status_code == 204
+    assert client.post('/api/v1/auth/session', headers=headers).status_code == 401
+    other = {'Authorization': 'Bearer ' + second['access_token']}
+    assert client.post('/api/v1/auth/session', headers=other).status_code == 200
+    user = session.exec(select(User).where(User.email == credentials['email'])).one()
+    user.is_active = False
+    session.add(user)
+    session.commit()
+    assert client.post('/api/v1/auth/session', headers=other).status_code == 401
+
+
+def test_logout_other_devices_requires_password_and_preserves_current(auth_client):
+    client, _ = auth_client
+    credentials = {'email': 'devices@example.com', 'password': 'devices-test-password'}
+    another = {'email': 'another@example.com', 'password': 'another-test-password'}
+    for account in [credentials, another]:
+        assert client.post('/api/v1/auth/register', json=account).status_code == 201
+    def login(account):
+        token = client.post('/api/v1/auth/login', json=account).json()['access_token']
+        return {'Authorization': 'Bearer ' + token}
+    current, phone, web, unrelated = login(credentials), login(credentials), login(credentials), login(another)
+    url = '/api/v1/auth/logout-others'
+    body = {'password': credentials['password']}
+    assert client.post(url, json=body).status_code == 401
+    assert client.post(url, headers=current, json={'password': 'wrong'}).status_code == 400
+    for headers in [current, phone, web, unrelated]:
+        assert client.get('/api/v1/auth/me', headers=headers).status_code == 200
+    # Rate limiting is separately tested below; this assertion exercises revocation.
+    _attempts.clear()
+    result = client.post(url, headers=current, json=body)
+    assert result.status_code == 200 and result.json()['revoked_count'] == 2
+    for headers in [phone, web]:
+        assert client.get('/api/v1/auth/me', headers=headers).status_code == 401
+        assert client.post('/api/v1/auth/session', headers=headers).status_code == 401
+    for headers in [current, unrelated]:
+        assert client.post('/api/v1/auth/session', headers=headers).status_code == 200
+    assert client.post(url, headers=current, json=body).json()['revoked_count'] == 0
+
+
+def test_logout_other_devices_limits_password_attempts(auth_client):
+    client, _ = auth_client
+    account = {'email': 'limit@example.com', 'password': 'rate-limit-test-password'}
+    client.post('/api/v1/auth/register', json=account)
+    token = client.post('/api/v1/auth/login', json=account).json()['access_token']
+    headers = {'Authorization': 'Bearer ' + token}
+    _attempts.clear()
+    for _ in range(10):
+        assert client.post('/api/v1/auth/logout-others', headers=headers,
+                           json={'password': 'wrong'}).status_code == 400
+    assert client.post('/api/v1/auth/logout-others', headers=headers,
+                       json={'password': 'wrong'}).status_code == 429
+    assert client.get('/api/v1/auth/me', headers=headers).status_code == 200
 
 
 def test_registration_roles_login_and_revocable_logout(auth_client):
@@ -52,6 +124,36 @@ def test_registration_roles_login_and_revocable_logout(auth_client):
     assert client.get("/api/v1/admin/candidates").status_code == 401
     assert client.post("/api/v1/auth/logout", headers=headers).status_code == 204
     assert client.get("/api/v1/auth/me", headers=headers).status_code == 401
+
+
+def test_profile_is_account_owned_and_nickname_requires_admin_review(auth_client):
+    client, session = auth_client
+    credentials = {'email':'profile@example.com','password':'test-profile-password'}
+    client.post('/api/v1/auth/register',json=credentials)
+    headers={'Authorization':'Bearer '+client.post('/api/v1/auth/login',json=credentials).json()['access_token']}
+    assert client.put('/api/v1/auth/me',json={'avatar':'leaf'}).status_code==401
+    assert client.put('/api/v1/auth/me',headers=headers,json={'avatar':'leaf','role':'admin'}).status_code==422
+    response=client.put('/api/v1/auth/me',headers=headers,json={'avatar':'music'})
+    assert response.status_code==200
+    assert response.json()['nickname']=='' and response.json()['role']=='regular'
+    assert client.get('/api/v1/auth/me',headers=headers).json()['avatar']=='music'
+    request=client.post('/api/v1/auth/nickname-change',headers=headers,json={'nickname':'新的昵称'})
+    assert request.status_code==200 and request.json()['status']=='pending'
+    assert client.get('/api/v1/auth/me',headers=headers).json()['nickname']==''
+    request_id=request.json()['id']
+    assert client.post('/api/v1/auth/nickname-change',headers=headers,json={'nickname':'更新后的昵称'}).json()['id']==request_id
+    admin=User(email='profile-admin@example.com',password_hash=hash_password('test-profile-password'),role=UserRole.admin)
+    session.add(admin);session.commit()
+    admin_headers={'Authorization':'Bearer '+client.post('/api/v1/auth/login',json={'email':admin.email,'password':'test-profile-password'}).json()['access_token']}
+    assert client.get('/api/v1/admin/nickname-changes',headers=headers).status_code==403
+    queue=client.get('/api/v1/admin/nickname-changes',headers=admin_headers).json()
+    assert queue[0]['proposed_nickname']=='更新后的昵称'
+    reviewed=client.post(f'/api/v1/admin/nickname-changes/{request_id}/review',headers=admin_headers,json={'approve':True,'note':'昵称合规'})
+    assert reviewed.status_code==200 and reviewed.json()['status']=='approved'
+    assert client.get('/api/v1/auth/me',headers=headers).json()['nickname']=='更新后的昵称'
+    assert client.post(f'/api/v1/admin/nickname-changes/{request_id}/review',headers=admin_headers,json={'approve':True,'note':'重复'}).status_code==409
+    assert client.get('/api/v1/auth/bindings').status_code==401
+    assert client.get('/api/v1/auth/bindings',headers=headers).json()['providers'][0]['available'] is False
 
 
 def test_expired_disabled_and_forged_sessions_are_denied(auth_client):

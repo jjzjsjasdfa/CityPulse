@@ -40,6 +40,7 @@ def review_client():
     schema = "test_review_" + uuid4().hex
     with engine.connect() as connection:
         transaction = connection.begin()
+        connection.execute(text('CREATE EXTENSION IF NOT EXISTS pg_trgm WITH SCHEMA public'))
         connection.execute(text(f'CREATE SCHEMA "{schema}"'))
         connection.execute(text(f'SET LOCAL search_path TO "{schema}", public'))
         scoped = connection.execution_options(schema_translate_map={None: schema})

@@ -9,6 +9,7 @@ __pycache__/
 .uv-cache/
 backend/.venv/
 backend/.test-deps/
+backend/.uv-tool/
 mobile/.expo/
 mobile/node_modules/
 mobile/dist/
@@ -16,3 +17,7 @@ mobile/dist-preview/
 mobile/artifacts/
 .edge-preview*/
 .chrome-preview*/
+.paddlex/
+.paddleocr/
+ocr/models/
+ocr/.venv/

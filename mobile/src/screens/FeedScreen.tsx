@@ -5,8 +5,13 @@ import type { EventSummary } from '../api/types';
 import { EventCard } from '../components/EventCard';
 import { FilterBar, type FilterValue } from '../components/FilterBar';
 import { colors } from '../theme';
+import { PosterDiscovery } from '../components/PosterDiscovery';
 
 interface Props {
+  signedIn: boolean;
+  onLogin:()=>void;
+  onSavePosterEvent: (id: string) => Promise<void>;
+  onOpenPosterEvent: (id: string) => void;
   events: EventSummary[];
   query: string;
   when: 'any' | 'today' | 'weekend';
@@ -28,10 +33,14 @@ interface Props {
 
 /** Renders searchable, filterable `events`; action callbacks are provided by the app shell. */
 export function FeedScreen(props: Props) {
+  const [availableWidth,setAvailableWidth] = useState(0);
+  const columns = availableWidth >= 1100 ? 3 : availableWidth >= 700 ? 2 : 1;
   const [search, setSearch] = useState(props.query);
   useEffect(() => setSearch(props.query), [props.query]);
   return (
-    <FlatList
+    <View style={{flex:1}} onLayout={e=>setAvailableWidth(e.nativeEvent.layout.width)}><FlatList
+      key={columns}
+      numColumns={columns}
       testID="event-feed"
       data={props.events}
       keyExtractor={(item) => item.id}
@@ -45,6 +54,7 @@ export function FeedScreen(props: Props) {
               <Text style={styles.title}>这座城，{`\n`}正在发生</Text>
             </View>
           </View>
+          {props.signedIn?<PosterDiscovery onSave={props.onSavePosterEvent} onOpen={props.onOpenPosterEvent} />:<Pressable accessibilityRole="button" onPress={props.onLogin} style={{padding:20}}><Text style={{color:colors.green}}>登录后上传海报，了解活动资料 →</Text></Pressable>}
           {props.offline && (
             <View style={styles.offlineBanner}>
               <Text style={styles.offlineText}>活动数据暂不可用 · 连接服务后下拉刷新</Text>
@@ -81,18 +91,20 @@ export function FeedScreen(props: Props) {
         )
       }
       renderItem={({ item }) => (
+        <View style={{width:`${100/columns}%`,paddingHorizontal:columns>1?8:0}}>
         <EventCard
           event={item}
           saved={props.savedIds.has(item.id)}
           onPress={() => props.onSelect(item)}
           onToggleSaved={() => props.onToggleSaved(item.id)}
         />
+        </View>
       )}
       ListFooterComponent={<View style={styles.footerSpace}>
         {!!props.moreError && <Text accessibilityRole="alert" style={styles.offlineText}>{props.moreError}</Text>}
         {props.hasMore && <Pressable accessibilityRole="button" disabled={props.loading} onPress={props.onLoadMore}><Text style={styles.pastLink}>{props.loading ? '正在加载…' : '加载更多'}</Text></Pressable>}
       </View>}
-    />
+    /></View>
   );
 }
 

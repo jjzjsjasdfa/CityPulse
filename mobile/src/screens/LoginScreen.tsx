@@ -1,14 +1,19 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput } from 'react-native';
 
-import { register, signIn } from '../api/client';
+import { lastAccount, register, signIn } from '../api/client';
 import type { LoginResponse } from '../api/types';
 import { colors } from '../theme';
 import { RequiredHint, RequiredMark } from '../components/RequiredField';
 
-/** Displays sign-in/registration forms and passes a successful session to `onLogin`. */
-export function LoginScreen({ onLogin }: { onLogin: (session: LoginResponse) => void }) {
+export function LoginScreen({ onLogin, onSkip }: { onLogin: (session: LoginResponse) => void; onSkip?:()=>void }) {
   const [email, setEmail] = useState('');
+  const emailEdited = useRef(false);
+  useEffect(() => {
+    let active = true;
+    void lastAccount().then(value => { if (active && !emailEdited.current) setEmail(value); }).catch(() => undefined);
+    return () => { active = false; };
+  }, []);
   const [password, setPassword] = useState('');
   const [creating, setCreating] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -35,10 +40,10 @@ export function LoginScreen({ onLogin }: { onLogin: (session: LoginResponse) => 
   return <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
     <Text style={styles.brand}>CITYPULSE · 长沙</Text>
     <Text style={styles.title}>{creating ? '创建账号' : '欢迎回来'}</Text>
-    <Text style={styles.copy}>登录后发现已审核的城市活动，收藏你想去的地方。</Text>
+    <Text style={styles.copy}>无需登录也能浏览活动与地图。登录后可同步收藏、识别海报。</Text>
     <RequiredHint />
     <Text style={styles.label}>邮箱<RequiredMark /></Text>
-    <TextInput accessibilityLabel="邮箱" autoCapitalize="none" autoComplete="email" keyboardType="email-address" value={email} onChangeText={setEmail} style={styles.input} />
+    <TextInput accessibilityLabel="邮箱" autoCapitalize="none" autoComplete="email" keyboardType="email-address" value={email} onChangeText={value=>{emailEdited.current=true;setEmail(value);}} style={styles.input} />
     <Text style={styles.label}>密码（12–128 个字符）<RequiredMark /></Text>
     <TextInput accessibilityLabel="密码" autoCapitalize="none" autoComplete={creating ? 'new-password' : 'current-password'} secureTextEntry value={password} onChangeText={setPassword} maxLength={128} style={styles.input} onSubmitEditing={() => { void submit(); }} />
     {!!error && <Text accessibilityRole="alert" style={styles.error}>{error}</Text>}
@@ -50,6 +55,7 @@ export function LoginScreen({ onLogin }: { onLogin: (session: LoginResponse) => 
       style={({ pressed }) => [styles.linkButton, pressed && !busy && styles.pressed, busy && styles.disabled]}>
       <Text style={styles.link}>{creating ? '已有账号？登录' : '没有账号？注册'}</Text>
     </Pressable>
+    {onSkip&&<Pressable accessibilityRole="button" disabled={busy} onPress={onSkip} style={styles.linkButton}><Text style={styles.link}>暂不登录，随便看看</Text></Pressable>}
   </ScrollView>;
 }
 

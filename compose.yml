@@ -1,4 +1,17 @@
 services:
+  ocr:
+    build:
+      context: ./ocr
+    restart: unless-stopped
+    volumes:
+      - ocr-models:/root/.paddlex
+    environment:
+      PADDLE_PDX_MODEL_SOURCE: BOS
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
   db:
     image: postgis/postgis:16-3.4
     restart: unless-stopped
@@ -7,7 +20,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-citypulse}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-citypulse-dev}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - ./database/init:/docker-entrypoint-initdb.d:ro
@@ -27,11 +40,15 @@ services:
       INGESTION_USER_AGENT: ${INGESTION_USER_AGENT:-CityPulse/0.1}
       INGESTION_ON_STARTUP: ${INGESTION_ON_STARTUP:-true}
       AMAP_API_KEY: ${AMAP_API_KEY:-}
+      POSTER_OCR_URL: http://ocr:8001
     ports:
       - "8000:8000"
     depends_on:
+      ocr:
+        condition: service_healthy
       db:
         condition: service_healthy
 
 volumes:
+  ocr-models:
   postgres-data:

@@ -72,6 +72,9 @@ try {
     const path = url.pathname.replace('/api/v1', '');
     const json = (body, status = 200) => route.fulfill({ status, json: body });
     if (request.method() === 'OPTIONS') return route.fulfill({ status: 204 });
+    if (path === '/favorites') return json({ ids: [], has_more: false });
+    if (path === '/posters') return json([]);
+    if (path.endsWith('/background')) return json({ artists: [], entries: [], references: [] });
     if (path === '/auth/register') {
       assert.equal(request.postDataJSON().role, undefined);
       return json({ id: 'regular', email: 'reader@example.com', role: 'regular' }, 201);
@@ -170,6 +173,8 @@ try {
   assert.equal(await page.getByRole('button', { name: '管理', exact: true }).count(), 0);
   assert.equal(privateRequests, 0);
   await page.getByRole('button', { name: '退出', exact: true }).click();
+  await page.getByRole('button', { name: '我的', exact: true }).click();
+  await page.getByRole('button', { name: '登录 / 注册', exact: true }).click();
   await page.getByLabel('邮箱', { exact: true }).fill('admin@example.com');
   await page.getByLabel('密码', { exact: true }).fill('browser-test-password');
   await page.getByRole('button', { name: '登录', exact: true }).click();
@@ -240,9 +245,12 @@ try {
   await mkdir('artifacts', { recursive: true });
   await page.screenshot({ path: 'artifacts/admin-review-smoke.png', fullPage: true });
   await page.getByRole('button', { name: '退出', exact: true }).click();
+  await page.getByRole('button', { name: '我的', exact: true }).click();
+  await page.getByRole('button', { name: '登录 / 注册', exact: true }).click();
   await page.getByLabel('邮箱', { exact: true }).fill('reader@example.com');
   await page.getByLabel('密码', { exact: true }).fill('browser-test-password');
   await page.getByRole('button', { name: '登录', exact: true }).click();
+  await page.getByRole('button', { name: '发现', exact: true }).click();
   await page.getByRole('button', { name: '查看Browser test concert 1' }).waitFor();
   assert.equal(await page.getByText('Browser test concert 2', { exact: true }).count(), 0);
   assert.equal(await page.getByRole('button', { name: '管理', exact: true }).count(), 0);
@@ -261,6 +269,8 @@ try {
   await page.getByRole('button', { name: '关闭活动详情', exact: true }).click();
   assert.doesNotMatch(new URL(page.url()).pathname, /^\/event\//, 'closing detail returns to the previous route');
   await page.getByRole('button', { name: '退出', exact: true }).click();
+  await page.getByRole('button', { name: '我的', exact: true }).click();
+  await page.getByRole('button', { name: '登录 / 注册', exact: true }).click();
   await page.getByLabel('邮箱', { exact: true }).fill('admin@example.com');
   await page.getByLabel('密码', { exact: true }).fill('browser-test-password');
   await page.getByRole('button', { name: '登录', exact: true }).click();

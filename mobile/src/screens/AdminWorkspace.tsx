@@ -4,10 +4,12 @@ import { CandidateReviewScreen } from './CandidateReviewScreen';
 import { EventAdministrationScreen } from './EventAdministrationScreen';
 import { UserAdministrationScreen } from './UserAdministrationScreen';
 import { colors } from '../theme';
+import { PosterAdministration } from './PosterAdministration';
+import { NicknameReviewScreen } from './NicknameReviewScreen';
 
-type AdminSection = 'candidates' | 'corrections' | 'events' | 'users';
+type AdminSection = 'candidates' | 'corrections' | 'events' | 'users' | 'posters' | 'profiles';
 const sectionLabels: Record<AdminSection, string> = {
-  candidates: '候选审核', corrections: '纠错收件箱', events: '活动', users: '用户与权限',
+  candidates: '候选审核', corrections: '纠错收件箱', events: '活动', users: '用户与权限', posters: '海报与词条', profiles: '昵称审核',
 };
 
 /** Selects an admin section; `userId` scopes drafts and `onChanged` refreshes public data. */
@@ -25,12 +27,14 @@ export function AdminWorkspace({ userId, onChanged }: { userId: string; onChange
   </View>;
   return <View style={{ flex: 1 }}>
     <View style={{ gap: 12, padding: 12 }}>
-      {navigation('审核中心', ['candidates', 'corrections'])}
+      {navigation('审核中心', ['candidates', 'corrections', 'posters', 'profiles'])}
       {navigation('内容与访问', ['events', 'users'])}
     </View>
     {section === 'candidates' && <CandidateReviewScreen userId={userId} onPublished={onChanged} />}
     {section === 'corrections' && <EventAdministrationScreen mode="corrections" userId={userId} onChanged={onChanged} />}
     {section === 'events' && <EventAdministrationScreen mode="events" userId={userId} onChanged={onChanged} />}
+    {section === 'posters' && <PosterAdministration onChanged={onChanged} />}
+    {section === 'profiles' && <NicknameReviewScreen />}
     {section === 'users' && <UserAdministrationScreen currentUserId={userId} />}
   </View>;
 }

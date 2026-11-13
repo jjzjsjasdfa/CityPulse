@@ -21,11 +21,35 @@ class Credentials(BaseModel):
     password: str = Field(min_length=12, max_length=128)
 
 
+class PasswordConfirmation(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    password: str = Field(min_length=1, max_length=128)
+
+
 class UserPublic(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: UUID
     email: str
     role: UserRole
+    nickname: str = ''
+    avatar: str = 'person'
+    created_at: datetime
+
+
+class ProfileUpdate(BaseModel):
+    model_config = ConfigDict(extra='forbid', str_strip_whitespace=True)
+    avatar: Literal['person', 'leaf', 'music', 'sun', 'cat', 'planet'] = 'person'
+
+
+class NicknameChangeInput(BaseModel):
+    model_config = ConfigDict(extra='forbid', str_strip_whitespace=True)
+    nickname: str = Field(min_length=1, max_length=40)
+
+
+class NicknameChangeReview(BaseModel):
+    model_config = ConfigDict(extra='forbid', str_strip_whitespace=True)
+    approve: bool
+    note: str = Field(min_length=1, max_length=500)
 
 
 class LoginResponse(BaseModel):
