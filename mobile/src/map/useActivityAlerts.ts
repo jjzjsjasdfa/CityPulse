@@ -1,16 +1,20 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { MapEvent } from '../api/types';
-import { appNow, nearbyRadius, storageKey } from '../demo';
 import { distanceKm, type Coordinate } from './geo';
 
 export const HALO_DURATION = 60_000;
+const ALERT_RADIUS_KM = 7;
+const ALERTS_KEY = '@citypulse/activity-alerts-v1';
+const NEARBY_KEY = '@citypulse/nearby-updates-v2';
+/** Builds a version key from an event ID and its latest publication timestamp. */
 export const activityVersion = (event: MapEvent) => `${event.id}:${event.published_at ?? event.starts_at}`;
+/** Tracks unread/visible nearby `points` relative to device `position` and times their halos. */
 export function useActivityAlerts(points: MapEvent[], position: Coordinate | null) {
-  const radius = nearbyRadius();
+  const radius = ALERT_RADIUS_KM;
   const latitude = position?.latitude, longitude = position?.longitude;
   const eligible = useMemo(() => new Set(points.filter(event => position && radius > 0 && distanceKm(position, event) <= radius).map(activityVersion)), [points, latitude, longitude, radius]);
-  const [key] = useState(() => storageKey('activity-alerts-v1'));
+  const key = ALERTS_KEY;
   const [done, setDone] = useState<Set<string>>(new Set());
   const [ready, setReady] = useState(false);
   const [deadlines, setDeadlines] = useState<Record<string, number>>({});
@@ -28,7 +32,7 @@ export function useActivityAlerts(points: MapEvent[], position: Coordinate | nul
     }
     if (excluded.size) setDeadlines(current => Object.fromEntries(Object.entries(current).filter(([version]) => !excluded.has(version))));
   }, [latitude, longitude, radius]);
-  useEffect(() => { let live = true; void Promise.all([AsyncStorage.getItem(key),AsyncStorage.getItem(storageKey('nearby-updates-v2'))]).then(([raw,old]) => {
+  useEffect(() => { let live = true; void Promise.all([AsyncStorage.getItem(key),AsyncStorage.getItem(NEARBY_KEY)]).then(([raw,old]) => {
     const data = JSON.parse(raw ?? '[]');
     if (raw == null && old) data.push(...(JSON.parse(old).viewed ?? []));
     if (live && Array.isArray(data)) setDone(new Set(data.filter(value => typeof value === 'string')));
@@ -44,18 +48,20 @@ export function useActivityAlerts(points: MapEvent[], position: Coordinate | nul
     }, Math.max(0, next - Date.now()));
     return () => clearTimeout(timer);
   }, [deadlines]);
+  /** Starts the one-minute completion timer for currently visible event `ids`. */
   const onVisible = useCallback((ids: string[]) => {
     if (!ready) return;
     const idSet = new Set(ids), additions: Record<string, number> = {};
     for (const event of latest.current) {
       const version = activityVersion(event);
-      if (eligible.has(version) && idSet.has(event.id) && !done.has(version) && !started.current.has(version) && Date.parse(event.ends_at) > appNow() && !['ended', 'cancelled', 'postponed'].includes(event.status)) {
+      if (eligible.has(version) && idSet.has(event.id) && !done.has(version) && !started.current.has(version) && Date.parse(event.ends_at) > Date.now() && !['ended', 'cancelled', 'postponed'].includes(event.status)) {
         startedEvents.current.set(version, event);
         started.current.add(version); additions[version] = Date.now() + HALO_DURATION;
       }
     }
     if (Object.keys(additions).length) setDeadlines(current => ({ ...current, ...additions }));
   }, [done, ready, eligible]);
+  /** Immediately marks every known version of event `id` as viewed. */
   const view = useCallback((id: string) => {
     const versions = latest.current.filter(event => event.id === id).map(activityVersion);
     setDone(current => new Set([...current, ...versions]));

@@ -9,15 +9,14 @@ import type {User} from '../api/types';
 import {Avatar,nickname} from '../components/AccountProfile';
 
 interface Props {
-  user:User|null; onLogin:()=>void; debug:boolean;
+  user:User|null; onLogin:()=>void; onSettings:()=>void;
   events: EventSummary[];
   savedIds: Set<string>;
   onSelect: (event: EventSummary) => void;
   onToggleSaved: (id: string) => void;
-  onSettings: () => void;
 }
 
-export function SavedScreen({ events, savedIds, onSelect, onToggleSaved, onSettings, user, onLogin, debug }: Props) {
+export function SavedScreen({ events, savedIds, onSelect, onToggleSaved, onSettings, user, onLogin }: Props) {
   const [availableWidth,setAvailableWidth]=useState(0);
   const saved = events.filter((event) => savedIds.has(event.id));
   const viewKey=`@citypulse/favorite-view/${user?.id||'guest'}`;
@@ -37,7 +36,7 @@ export function SavedScreen({ events, savedIds, onSelect, onToggleSaved, onSetti
           <View style={{flexDirection:'row',alignItems:'center',justifyContent:'space-between'}}><View style={{flexDirection:'row',alignItems:'center',gap:14}}><Avatar value={user?.avatar}/><View><Text style={{fontSize:24,fontWeight:'800',color:colors.ink}}>{user?nickname(user):'欢迎来逛逛'}</Text>{!user&&<Pressable accessibilityRole="button" onPress={onLogin}><Text style={{color:colors.green,paddingVertical:8}}>登录 / 注册</Text></Pressable>}</View></View>
             <Pressable accessibilityRole="button" accessibilityLabel="设置" onPress={onSettings} style={{padding:12}}><Text style={{fontSize:25,color:colors.ink}}>⚙</Text></Pressable></View>
           <Text style={{fontSize:20,fontWeight:'700',color:colors.ink,marginTop:22}}>我的收藏</Text>
-          <Text style={styles.subtitle}>{!user?'登录后可收藏活动，并在不同设备上同步。':debug?'调试收藏 · 与账号的正式收藏分开保存。':`已收藏 ${savedIds.size} 个活动 · 随账号同步`}</Text>
+          <Text style={styles.subtitle}>{!user?'登录后可收藏活动，并在不同设备上同步。':`已收藏 ${savedIds.size} 个活动 · 随账号同步`}</Text>
           <View style={styles.switcher}><Pressable accessibilityRole="button" accessibilityLabel="卡片形式" accessibilityState={{selected:view==='cards'}} onPress={()=>choose('cards')} style={[styles.switchButton,view==='cards'&&styles.switchActive]}><Text>▦ 卡片</Text></Pressable><Pressable accessibilityRole="button" accessibilityLabel="列表形式" accessibilityState={{selected:view==='list'}} onPress={()=>choose('list')} style={[styles.switchButton,view==='list'&&styles.switchActive]}><Text>☷ 列表</Text></Pressable></View>
         </View>
       }

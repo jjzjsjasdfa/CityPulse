@@ -17,31 +17,38 @@ import { regionAtDefaultScale } from '../map/geo';
 import { EdgeGuidance } from '../map/EdgeGuidance';
 import { LocationControls, UserLocationDot } from '../map/LocationControls';
 import { categoryLabels, colors } from '../theme';
-import { DEMO_MODE, nearbyRadius } from '../demo';
 
 type TapPoint = { x: number; y: number };
 type MapPress = { start: TapPoint; end: TapPoint; cancelled: boolean; at: number };
 const presses = new WeakMap<L.Map, MapPress>();
 
+/** Tracks pointer/touch movement on `map` so dragging is not mistaken for marker taps. */
 function observePresses(map: L.Map) {
   const element = map.getContainer();
+  /** Records the initial screen `x`,`y`; `multiple` cancels multi-touch taps. */
   const start = (x: number, y: number, multiple = false) => presses.set(map, {
     start: { x, y }, end: { x, y }, cancelled: multiple, at: Date.now(),
   });
+  /** Updates the current press and cancels it after movement or multi-touch. */
   const move = (x: number, y: number, multiple = false) => {
     const press = presses.get(map);
     if (!press) return;
     press.end = { x, y }; press.at = Date.now();
     press.cancelled ||= multiple || Math.hypot(x - press.start.x, y - press.start.y) > 6;
   };
+  /** Starts tracking a pointer-down `event`. */
   const down = (event: PointerEvent) => start(event.clientX, event.clientY);
+  /** Updates tracking from a pointer move/up `event`. */
   const update = (event: PointerEvent) => move(event.clientX, event.clientY);
+  /** Cancels the current press after a pointer cancellation. */
   const cancel = () => { const press = presses.get(map); if (press) press.cancelled = true; };
   // Mobile browsers can retarget a synthetic click to a nearby link. Keep the
   // original finger coordinates, before that touch-target adjustment occurs.
+  /** Captures original browser touch coordinates before click retargeting. */
   const touchStart = (event: TouchEvent) => {
     const touch = event.touches[0]; if (touch) start(touch.clientX, touch.clientY, event.touches.length > 1);
   };
+  /** Updates the stored press from a moved or ended browser touch. */
   const touchUpdate = (event: TouchEvent) => {
     const touch = event.changedTouches[0]; if (touch) move(touch.clientX, touch.clientY, event.touches.length > 1);
   };
@@ -64,6 +71,7 @@ function observePresses(map: L.Map) {
   };
 }
 
+/** Creates a Leaflet marker for `point` and portals the shared React marker UI into it. */
 function EventPin({ map, point, dx, dy, width, level, detail, labelVisible, now, saved, unread, haloUntil, onSelect }: {
   dx: number; dy: number;
   map: L.Map; point: MapEvent; width: number; level: MapLevel; detail: MapDetail;
@@ -95,6 +103,7 @@ function EventPin({ map, point, dx, dy, width, level, detail, labelVisible, now,
       if (press && Date.now() - press.at < 1000) {
         if (press.cancelled) return;
         const box = hit.getBoundingClientRect();
+        /** Checks whether recorded tap point `p` falls inside the actual visible target. */
         const inside = (p: TapPoint) => hit.getAttribute('data-testid')?.startsWith('event-dot-') ?
           Math.hypot(p.x - box.x - box.width / 2, p.y - box.y - box.height / 2) <= Math.min(box.width, box.height) / 2 :
           p.x >= box.left && p.x <= box.right && p.y >= box.top && p.y <= box.bottom;
@@ -116,14 +125,10 @@ function EventPin({ map, point, dx, dy, width, level, detail, labelVisible, now,
   }, [map, host, point.id, point.latitude, point.longitude, point.name, point.category, width, saved]);
   return createPortal(<EventMarker point={point} width={width} level={level} detail={detail} labelVisible={labelVisible} now={now} saved={saved} unread={unread} haloUntil={haloUntil} interactive />, host);
 }
+/** Creates and updates the user's non-interactive Leaflet location marker. */
 function OwnLocation({ map, latitude, longitude }: { map: L.Map; latitude: number; longitude: number }) {
   const host = useMemo(() => document.createElement('div'), []);
   const marker = useRef<L.Marker | null>(null);
-  useEffect(() => {
-    if (!DEMO_MODE || nearbyRadius()<=0) return;
-    const circle=L.circle([latitude,longitude],{radius:nearbyRadius()*1000,color:'#38BDB6',weight:1.5,dashArray:'6 7',fill:false,interactive:false}).addTo(map);
-    return ()=>{circle.remove();};
-  }, [map,latitude,longitude]);
   useEffect(() => {
     host.dataset.testid = 'my-location'; host.setAttribute('aria-label', '我的位置');
     marker.current = L.marker([latitude, longitude], { interactive: false, zIndexOffset: 2000,
@@ -133,12 +138,14 @@ function OwnLocation({ map, latitude, longitude }: { map: L.Map; latitude: numbe
   useEffect(() => { marker.current?.setLatLng([latitude, longitude]); }, [latitude, longitude]);
   return createPortal(<UserLocationDot />, host);
 }
+/** Renders the Leaflet web map from shared map data and reports camera/selection changes. */
 export function MapScreen({ session, unreadIds, haloUntil, onVisibleEvents, points, savedIds, onBoundsChange, onSelectId, position, locationStatus,
   onLocate, newEvents, onSeenEvents, ...state }: MapScreenProps) {
   const container = useRef<HTMLDivElement>(null);
   const interacting = useRef(false);
   const insets = useSafeAreaInsets();
   const [hidden, setHidden] = useState(new Set<EventCategory>(session.hiddenCategories));
+  /** Shows or hides `category` and persists that choice in this launch's map session. */
   const toggle = (category: EventCategory) => setHidden(current => { const next = new Set(current); next.has(category)?next.delete(category):next.add(category); session.hiddenCategories=[...next]; return next; });
   const [map, setMap] = useState<L.Map | null>(null);
   const [size, setSize] = useState({ width: 390, height: 772 });
@@ -162,6 +169,7 @@ export function MapScreen({ session, unreadIds, haloUntil, onVisibleEvents, poin
   useEffect(() => { onVisibleEvents(visibleKey ? visibleKey.split(',') : []); }, [visibleKey,versionKey,onVisibleEvents]);
   useEffect(() => {
     const media = matchMedia('(any-pointer: coarse)');
+    /** Updates whether browser controls should be optimized for touch input. */
     const update = () => setTouch(navigator.maxTouchPoints > 0 || media.matches);
     update(); media.addEventListener('change', update);
     return () => media.removeEventListener('change', update);
@@ -185,11 +193,13 @@ export function MapScreen({ session, unreadIds, haloUntil, onVisibleEvents, poin
     view.fitBounds([[b.south, b.west], [b.north, b.east]], { animate: false });
     setMap(view);
     let frame = 0;
+    /** Converts the current Leaflet camera into the shared map-region shape. */
     const readRegion = () => {
       const box = view.getBounds(), center = view.getCenter();
       return { latitude: center.lat, longitude: normalizeLongitude(center.lng),
         latitudeDelta: box.getNorth() - box.getSouth(), longitudeDelta: Math.min(360, box.getEast() - box.getWest()) };
     };
+    /** Samples camera motion into React state at most once per animation frame. */
     const update = () => {
       viewport.current = readRegion();
       session.region = viewport.current;
@@ -198,6 +208,7 @@ export function MapScreen({ session, unreadIds, haloUntil, onVisibleEvents, poin
         const next = view.getSize(); setSize((old) => old.width === next.x && old.height === next.y ? old : { width: next.x, height: next.y });
       });
     };
+    /** Publishes final query bounds after map movement settles. */
     const settled = () => { update(); boundsCallback.current(boundsFromRegion(readRegion())); };
     view.on('move zoom', update).on('moveend', settled);
     view.on('zoomanim', (event: L.ZoomAnimEvent) => {
@@ -215,6 +226,7 @@ export function MapScreen({ session, unreadIds, haloUntil, onVisibleEvents, poin
       view.stop(); cancelAnimationFrame(frame); view.remove();
     };
   }, []);
+  /** Centers the Leaflet camera on the current device position, or retries location. */
   const recenter = () => {
     if (!position) { onLocate(); return; }
     if (!map) return;

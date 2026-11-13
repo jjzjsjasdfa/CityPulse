@@ -4,11 +4,13 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { DraftControls, draftKey } from '../components/DraftControls';
 import { EventFields, eventFields as fields, type EventDraft as Draft } from '../components/EventFields';
 import { SourceComparison } from '../components/SourceComparison';
+import { RequiredMark } from '../components/RequiredField';
 
-import { approveCandidate, enrichCandidate, listCandidates, rejectCandidate } from '../api/client';
-import type { Candidate, CandidateApproval, CandidateStatus, EventStatus } from '../api/types';
+import { approveCandidate, enrichCandidate, getCandidate, listCandidates, rejectCandidate } from '../api/client';
+import type { Candidate, CandidateApproval, CandidateStatus, CandidateSummary, EventStatus } from '../api/types';
 import { categoryLabels, colors, statusLabels } from '../theme';
 
+/** Converts a backend `candidate` into string values suitable for the review form. */
 function candidateDraft(candidate: Candidate): Draft {
   return Object.fromEntries(fields.map(([key]) => [key,
     key === 'evidence_url' ? candidate.official_url :
@@ -17,11 +19,13 @@ function candidateDraft(candidate: Candidate): Draft {
 }
 const labels: Record<CandidateStatus, string> = { pending: '待审核', approved: '已通过', rejected: '已拒绝' };
 
+/** Manages candidate review; `userId` scopes drafts and `onPublished` refreshes public events. */
 export function CandidateReviewScreen({ onPublished, userId }: { onPublished: () => void; userId: string }) {
   const [status, setStatus] = useState<CandidateStatus>('pending');
   const [offset, setOffset] = useState(0);
-  const [items, setItems] = useState<Candidate[]>([]);
+  const [items, setItems] = useState<CandidateSummary[]>([]);
   const [selected, setSelected] = useState<Candidate | null>(null);
+  const [selectingId, setSelectingId] = useState<string | null>(null);
   const [draft, setDraft] = useState<Draft>({} as Draft);
   const [eventStatus, setEventStatus] = useState<EventStatus>('announced');
   const [busy, setBusy] = useState(false);
@@ -53,12 +57,21 @@ export function CandidateReviewScreen({ onPublished, userId }: { onPublished: ()
     return () => { requestId.current++; };
   }, [status, offset, revision]);
 
-  const select = (candidate: Candidate) => {
-    setSelected(candidate); setError(''); setNotice(''); setEventStatus('announced');
-    setSubmitError(''); setValidation(null); revealFeedback.current = false;
-    setEnrichmentError(''); setEnrichmentNotice('');
-    setDraft(candidateDraft(candidate));
+  /** Loads full detail for the selected candidate `summary` and initializes its form. */
+  const select = async (summary: CandidateSummary) => {
+    if (selectingId) return;
+    setSelectingId(summary.id); setError(''); setNotice('');
+    try {
+      const candidate = await getCandidate(summary.id);
+      setSelected(candidate); setEventStatus('announced');
+      setSubmitError(''); setValidation(null); revealFeedback.current = false;
+      setEnrichmentError(''); setEnrichmentNotice('');
+      setDraft(candidateDraft(candidate));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '无法加载候选详情。');
+    } finally { setSelectingId(null); }
   };
+  /** Enriches the selected candidate while preserving fields already edited by the admin. */
   const enrich = async () => {
     if (!selected || enriching || busy) return;
     setEnriching(true); setEnrichmentError(''); setEnrichmentNotice('');
@@ -74,6 +87,7 @@ export function CandidateReviewScreen({ onPublished, userId }: { onPublished: ()
     } catch (err) { setEnrichmentError(err instanceof Error ? err.message : '补充失败，请重试'); }
     finally { setEnriching(false); }
   };
+  /** Validates and approves or rejects the candidate according to `approve`. */
   const review = async (approve: boolean) => {
     if (!selected) return;
     Keyboard.dismiss();
@@ -154,7 +168,7 @@ export function CandidateReviewScreen({ onPublished, userId }: { onPublished: ()
           missing={missingFields.map(([key]) => key)} onChange={(key, value) => {
             setDraft((current) => ({ ...current, [key]: value })); setSubmitError('');
           }} />
-        <Text style={styles.label}>活动状态</Text>
+        <Text style={styles.label}>活动状态<RequiredMark /></Text>
         {Date.parse(draft.ends_at) < Date.now() && <Text style={styles.copy}>该活动已结束。通过后将显示在发现页的「往期活动」，不会出现在近期活动中。</Text>}
         <View style={styles.row}>{(Object.keys(statusLabels) as EventStatus[]).map((value) =>
           <Pressable accessibilityRole="button" accessibilityState={{ selected: eventStatus === value }} key={value} disabled={busy} style={[styles.chip, eventStatus === value && styles.active]} onPress={() => setEventStatus(value)}><Text>{statusLabels[value]}</Text></Pressable>)}</View>
@@ -182,10 +196,11 @@ export function CandidateReviewScreen({ onPublished, userId }: { onPublished: ()
         <Pressable accessibilityRole="button" accessibilityState={{ selected: status === value }} key={value} style={[styles.chip, status === value && styles.active]} onPress={() => { setStatus(value); setOffset(0); }}><Text>{labels[value]}</Text></Pressable>)}</View>
       <Pressable accessibilityRole="button" onPress={() => setRevision((value) => value + 1)}><Text style={styles.link}>刷新队列</Text></Pressable>
       {loading ? <ActivityIndicator color={colors.orange} /> : items.length === 0 ? <Text style={styles.copy}>暂无{labels[status]}的候选活动。</Text> : items.map((candidate) =>
-        <Pressable accessibilityRole="button" key={candidate.id} onPress={() => select(candidate)} style={styles.card}>
+        <Pressable accessibilityRole="button" disabled={selectingId !== null} key={candidate.id} onPress={() => void select(candidate)} style={styles.card}>
           <Text style={styles.heading}>{candidate.name}</Text>
           <Text style={styles.copy}>{candidate.venue_name ?? '待补充场馆'} · {candidate.price ?? '票价待核实'}</Text>
           <Text style={styles.copy}>{candidate.starts_at ?? '待补充活动时间'}</Text>
+          {selectingId === candidate.id && <ActivityIndicator color={colors.orange} />}
         </Pressable>)}
       <View style={styles.row}>
         <Pressable accessibilityRole="button" disabled={offset === 0 || loading} onPress={() => setOffset(Math.max(0, offset - 20))}><Text style={styles.link}>上一页</Text></Pressable>

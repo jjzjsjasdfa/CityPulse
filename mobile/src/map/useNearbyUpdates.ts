@@ -5,12 +5,14 @@ import { listNearbyUpdates } from '../api/client';
 import type { NearbyEvent } from '../api/types';
 import type { Coordinate } from './geo';
 import { acknowledgeNearby, EMPTY_NEARBY, mergeNearby, readNearbyState, viewNearby } from './nearbyState';
-import { appNow, storageKey } from '../demo';
 
 export const NEARBY_POLL_MS = 60_000;
+const NEARBY_KEY = '@citypulse/nearby-updates-v2';
+const ALERTS_KEY = '@citypulse/activity-alerts-v1';
 
+/** Polls updates near `position` while the map is `active` and persists alert state. */
 export function useNearbyUpdates(position: Coordinate | null, active: boolean) {
-  const [KEY] = useState(() => storageKey('nearby-updates-v2'));
+  const KEY = NEARBY_KEY;
   const [state, setState] = useState(EMPTY_NEARBY);
   const [points, setPoints] = useState<NearbyEvent[]>([]);
   const [ready, setReady] = useState(false);
@@ -20,11 +22,12 @@ export function useNearbyUpdates(position: Coordinate | null, active: boolean) {
   latestState.current = state;
   useEffect(() => {
     let mounted = true;
-    void Promise.all([AsyncStorage.getItem(KEY),AsyncStorage.getItem(storageKey('activity-alerts-v1'))]).then(([value,alerts]) => {
+    void Promise.all([AsyncStorage.getItem(KEY),AsyncStorage.getItem(ALERTS_KEY)]).then(([value,alerts]) => {
       if (mounted) {
         const restored = readNearbyState(value);
-        if (restored.watermark && Date.parse(restored.watermark) > appNow()) restored.watermark = null;
-        const current = (event: NearbyEvent) => Date.parse(event.published_at) <= appNow() && Date.parse(event.ends_at) > appNow();
+        if (restored.watermark && Date.parse(restored.watermark) > Date.now()) restored.watermark = null;
+        /** Keeps only events that have been published and have not ended. */
+        const current = (event: NearbyEvent) => Date.parse(event.published_at) <= Date.now() && Date.parse(event.ends_at) > Date.now();
         restored.pending = restored.pending.filter(current); restored.unread = restored.unread.filter(current);
         const completed = new Set<string>(JSON.parse(alerts ?? '[]'));
         // A previous launch reaching the map is not the one-minute completion condition.
@@ -46,6 +49,7 @@ export function useNearbyUpdates(position: Coordinate | null, active: boolean) {
     let stopped = false;
     let controller: AbortController | undefined;
     let timer: ReturnType<typeof setTimeout> | undefined;
+    /** Performs one incremental nearby-update request and schedules the next poll. */
     const poll = async () => {
       if (stopped || (AppState.currentState && AppState.currentState !== 'active')) return;
       controller?.abort();
@@ -54,11 +58,11 @@ export function useNearbyUpdates(position: Coordinate | null, active: boolean) {
       try {
         const result = await listNearbyUpdates({ latitude, longitude }, latestState.current.watermark, request.signal);
         if (!request.signal.aborted && !stopped) {
-          setState((current) => mergeNearby(current, result.events, result.checkedAt, appNow()));
+          setState((current) => mergeNearby(current, result.events, result.checkedAt, Date.now()));
           setPoints((current) => {
             const merged = new Map(current.map((event) => [event.id, event]));
             result.events.forEach((event) => merged.set(event.id, event));
-            return [...merged.values()].filter((event) => Date.parse(event.ends_at) > appNow());
+            return [...merged.values()].filter((event) => Date.parse(event.ends_at) > Date.now());
           });
           setUnavailable(false);
         }
@@ -77,8 +81,11 @@ export function useNearbyUpdates(position: Coordinate | null, active: boolean) {
     return () => { stopped = true; clearTimeout(timer); controller?.abort(); subscription.remove(); };
   }, [latitude, longitude, active, ready, revision]);
 
+  /** Marks event `ids` as seen after their map guidance is displayed. */
   const acknowledge = useCallback((ids: string[]) => setState((current) => acknowledgeNearby(current, ids)), []);
+  /** Restarts polling without changing the current nearby state. */
   const refresh = useCallback(() => setRevision((value) => value + 1), []);
+  /** Marks event `id` as viewed when the user opens its detail. */
   const view = useCallback((id: string) => setState((current) => current.unread.some((event) => event.id === id) ? viewNearby(current, id) : current), []);
   return { events: state.pending, unread: state.unread, points, acknowledge, view, unavailable, refresh };
 }

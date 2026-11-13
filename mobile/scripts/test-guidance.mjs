@@ -87,7 +87,7 @@ test('15 km radius is tied to the user, while panning recomputes the screen dire
   assert.deepEqual(guidanceTargets([inside], null, region, size, now).targets, []);
 });
 
-test('debug radius zero disables signals; 30 km includes farther activities', () => {
+test('radius zero disables signals; 30 km includes farther activities', () => {
   const far = event('far', 20, 0);
   assert.equal(guidanceTargets([far],origin,region,size,now,120,true,undefined,15).targets.length,0);
   assert.equal(guidanceTargets([event('center',0,0)],origin,region,size,now,120,true,undefined,0).central.length,0);

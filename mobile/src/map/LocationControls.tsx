@@ -5,10 +5,12 @@ import type { LocationStatus } from './useDeviceLocation';
 import { colors } from '../theme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+/** Draws the blue dot representing the user's current position. */
 export function UserLocationDot() {
   return <View style={styles.halo} collapsable={false}><View style={styles.dot} /></View>;
 }
 
+/** Shows the map scale and recenter action for `region`, viewport `width`, and location `status`. */
 export function LocationControls({ region, width, status, onRecenter, showScale = true }: {
   region: MapRegion; width: number; status: LocationStatus; onRecenter: () => void; showScale?: boolean;
 }) {
@@ -26,6 +28,7 @@ export function LocationControls({ region, width, status, onRecenter, showScale 
   </View>;
 }
 
+/** Returns the user-facing guidance message for a location `status`. */
 export const locationStatusText = (status: LocationStatus) => ({
   locating: '正在获取你的位置…', ready: '留意边缘色彩 · 发现附近7公里的新活动',
   denied: '定位未授权 · 可点击定位按钮开启', unavailable: '暂时无法定位 · 可点击定位按钮重试',

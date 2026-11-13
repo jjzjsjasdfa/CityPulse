@@ -15,7 +15,7 @@ try {
   await route.fulfill({status,contentType:'application/json',body:JSON.stringify(body)});
  });
  await page.goto(process.env.SMOKE_URL||'http://localhost:8081');
- await page.getByRole('button',{name:'审核',exact:true}).click();
+ await page.getByRole('button',{name:'管理',exact:true}).click();
  await page.getByRole('button',{name:'昵称审核',exact:true}).click();
  await page.getByRole('button',{name:'审核 城市漫游者',exact:true}).waitFor();
  await page.getByLabel('搜索当前列表').fill('不存在');await page.getByText('暂无申请',{exact:true}).waitFor();

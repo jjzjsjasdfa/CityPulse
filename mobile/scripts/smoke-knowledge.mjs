@@ -41,7 +41,7 @@ try{
  await page.screenshot({path:'artifacts/knowledge-person.png'});
  await page.getByText('关闭 ×',{exact:true}).click();
  await page.getByLabel('搜索活动名称').fill('音乐');await page.getByText('模糊搜索更多活动',{exact:true}).click();
- await page.getByRole('button',{name:'审核',exact:true}).click();
+ await page.getByRole('button',{name:'管理',exact:true}).click();
  await page.getByRole('button',{name:'海报与词条',exact:true}).click();
  await page.getByRole('button',{name:'词条库',exact:true}).click();
  await page.getByLabel('检索词条').fill('星河测试');await page.getByText('搜索词条',{exact:true}).click();

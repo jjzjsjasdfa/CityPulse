@@ -13,6 +13,14 @@ pytestmark = pytest.mark.skipif(
 )
 
 
+def first_correction(client, headers):
+    summary = client.get("/api/v1/admin/corrections", headers=headers).json()[0]
+    assert "contact_email" not in summary and "message_preview" in summary
+    response = client.get(f"/api/v1/admin/corrections/{summary['id']}", headers=headers)
+    assert response.status_code == 200
+    return response.json()
+
+
 def test_correction_application_is_atomic_private_and_cannot_be_replayed(review_client):
     client, session = review_client
     headers, _, _, _, event_id = published(client, session)
@@ -26,7 +34,7 @@ def test_correction_application_is_atomic_private_and_cannot_be_replayed(review_
         },
     )
     assert created.status_code == 202
-    correction = client.get("/api/v1/admin/corrections", headers=headers).json()[0]
+    correction = first_correction(client, headers)
     path = f"/api/v1/admin/corrections/{correction['id']}/review"
     body = {
         "expected_updated_at": correction["updated_at"],
@@ -67,7 +75,7 @@ def test_correction_reviewing_rejection_and_hidden_event_submission(review_clien
         "/api/v1/corrections",
         json={"event_id": event_id, "kind": "other", "message": "Please verify this information"},
     )
-    correction = client.get("/api/v1/admin/corrections", headers=headers).json()[0]
+    correction = first_correction(client, headers)
     path = f"/api/v1/admin/corrections/{correction['id']}/review"
     body = {
         "expected_updated_at": correction["updated_at"],

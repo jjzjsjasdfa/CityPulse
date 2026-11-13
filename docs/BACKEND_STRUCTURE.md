@@ -32,7 +32,7 @@ It validates the version, locks rows, updates the event and writes its audit, bu
 only flushes. The route owns the commit so a correction and its event update remain
 one transaction. Routers do not import business operations from other routers.
 
-Public event queries require `is_published=true` and `is_demo=false`. The default
+Public event queries require `is_published=true`. The default
 feed and map exclude ended events; `time_scope=past` selects the feed archive.
 The map uses a PostGIS
 bounding-box query. Event detail includes source evidence and status history.
@@ -72,8 +72,7 @@ Bootstrap attempts Showstart ingestion; a fetch failure is logged without blocki
 startup. `INGESTION_ON_STARTUP` controls this behavior.
 
 Alembic migrations live in `backend/alembic/versions`. Revision `20260912_0005`
-adds accounts, sessions and review audit/link fields, and unpublishes legacy demo
-records without deleting them. `app.seed` has been removed.
+adds accounts, sessions and review audit/link fields. `app.seed` has been removed.
 
 ## Contract and frontend
 

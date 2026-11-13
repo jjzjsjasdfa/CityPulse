@@ -1,16 +1,14 @@
 from datetime import UTC, datetime
-from urllib.parse import urlsplit
 from uuid import UUID
 
-import httpx
 from fastapi import APIRouter, HTTPException, Query
 from sqlmodel import select
 
 from app.core.config import settings
 from app.core.security import AdminDep, SessionDep, aware_utc
-from app.ingestion.places import VenueLookup
+from app.ingestion.http import SourceHttpClient
+from app.ingestion.registry import build_item_enrichment_pipeline
 from app.ingestion.runner import content_hash
-from app.ingestion.showstart import ShowStartVenueAdapter
 from app.ingestion.types import IngestionItem
 from app.models import (
     CandidateReviewStatus,
@@ -23,6 +21,7 @@ from app.models import (
 )
 from app.schemas import (
     AdminCandidate,
+    AdminCandidateSummary,
     CandidateApproval,
     CandidateComparison,
     CandidateEnrich,
@@ -33,7 +32,7 @@ from app.schemas import (
 router = APIRouter(prefix="/admin/candidates", tags=["admin-candidates"])
 
 
-@router.get("", response_model=list[AdminCandidate])
+@router.get("", response_model=list[AdminCandidateSummary])
 def list_candidates(
     session: SessionDep,
     admin: AdminDep,
@@ -48,6 +47,14 @@ def list_candidates(
         .offset(offset)
         .limit(limit)
     ).all()
+
+
+@router.get("/{candidate_id}", response_model=AdminCandidate)
+def get_candidate(candidate_id: UUID, session: SessionDep, admin: AdminDep):
+    candidate = session.get(EventCandidate, candidate_id)
+    if candidate is None:
+        raise HTTPException(404, "Candidate not found")
+    return candidate
 
 
 def _lock_pending_candidate(session, candidate_id: UUID, expected: datetime) -> EventCandidate:
@@ -126,14 +133,13 @@ def enrich_candidate(
     session.rollback()
     try:
         api_key = settings.amap_api_key.get_secret_value() if settings.amap_api_key else None
-        if urlsplit(item.canonical_url).hostname == "www.showstart.com":
-            with ShowStartVenueAdapter(
-                user_agent=settings.ingestion_user_agent, amap_api_key=api_key
-            ) as adapter:
-                enriched = adapter.enrich(item)
-        else:
-            with httpx.Client(timeout=20) as client:
-                enriched = VenueLookup(api_key, client).enrich(item)
+        with SourceHttpClient(
+            user_agent=settings.ingestion_user_agent,
+            fallback_user_agent="CityPulse/0.1",
+        ) as http:
+            enriched = build_item_enrichment_pipeline(item.canonical_url, http, api_key).enrich(
+                item
+            )
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from None
     # Keep the same raw-item -> candidate lock ordering as the ingestion runner.
@@ -184,7 +190,6 @@ def approve_candidate(
         location=f"SRID=4326;POINT({body.longitude} {body.latitude})",
         last_verified_at=now,
         confidence=source.reliability_score,
-        is_demo=False,
         is_published=True,
         updated_at=now,
     )

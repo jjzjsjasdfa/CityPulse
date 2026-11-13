@@ -125,7 +125,7 @@ def result(row, session, *, admin=False):
     people = [link['entry'] for link in links if link['field'] == 'artists' and link['entry']]
     matches = []
     title = (facts.get('name') or '').strip()
-    candidates = session.exec(select(Event).where(Event.is_published.is_(True), Event.is_demo.is_(False),
+    candidates = session.exec(select(Event).where(Event.is_published.is_(True), Event.archived_at.is_(None),
         or_(Event.name.icontains(title, autoescape=True), Event.name.op('%')(title)))
         .order_by(func.similarity(Event.name, title).desc(), Event.id).limit(201)).all() if title else []
     for event in candidates[:200]:
@@ -271,7 +271,7 @@ def review(poster_id: UUID, body: Review, session: SessionDep, admin: AdminDep):
             session.flush()
         else:
             event = session.exec(select(Event).where(Event.id == body.event_id).with_for_update()).first()
-            if not event or event.is_demo or not event.is_published:
+            if not event or event.archived_at is not None or not event.is_published:
                 raise HTTPException(422, "请选择已发布的真实活动")
         background = session.get(EventBackground, event.id) or EventBackground(event_id=event.id)
         background.artist_ids = list(dict.fromkeys([*background.artist_ids, *map(str, body.artist_ids)]))
@@ -306,7 +306,7 @@ def review(poster_id: UUID, body: Review, session: SessionDep, admin: AdminDep):
 @router.get("/events/{event_id}/background")
 def background(event_id: UUID, session: SessionDep):
     event = session.get(Event, event_id)
-    if not event or not event.is_published or event.is_demo:
+    if not event or not event.is_published or event.archived_at is not None:
         raise HTTPException(404, "活动不存在")
     row = session.get(EventBackground, event_id)
     people = [session.get(Artist, UUID(item)) for item in row.artist_ids] if row else []

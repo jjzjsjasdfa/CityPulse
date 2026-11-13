@@ -4,6 +4,7 @@ import type { EventCategory } from '../api/types';
 import { categoryColors, categoryLabels } from '../theme';
 import { useEffect, useRef } from 'react';
 
+/** Animates native category filters; `hidden` tracks disabled categories and `toggle` changes one. */
 export function CategoryChips({ shown, hidden, toggle, top }: { shown: boolean; hidden: ReadonlySet<EventCategory>; toggle: (category: EventCategory) => void; top: number }) {
   const opacity = useRef(new Animated.Value(shown ? 1 : 0)).current;
   useEffect(() => { const animation = Animated.timing(opacity, {toValue:shown?1:0,duration:200,useNativeDriver:true}); animation.start(); return () => animation.stop(); }, [shown,opacity]);

@@ -4,7 +4,6 @@ import {
   ActivityIndicator,
   Alert,
   Linking,
-  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -16,11 +15,11 @@ import {
 } from 'react-native';
 
 import type { EventDetail } from '../api/types';
+import { RequiredHint, RequiredMark } from './RequiredField';
 import { eventLink } from '../eventLinks';
 import { categoryColors, categoryLabels, colors, formatDate, statusLabels } from '../theme';
 
 interface Props {
-  presentation?: 'panel' | 'modal';
   event: EventDetail | null;
   loading: boolean;
   saved: boolean;
@@ -29,7 +28,8 @@ interface Props {
   onSubmitCorrection: (message: string) => Promise<void>;
 }
 
-export function DetailSheet({ event, loading, saved, onClose, onToggleSaved, onSubmitCorrection, presentation = 'modal' }: Props) {
+/** Shows `event` details and delegates close, save, and correction actions to its callbacks. */
+export function DetailSheet({ event, loading, saved, onClose, onToggleSaved, onSubmitCorrection }: Props) {
   const [showCorrection, setShowCorrection] = useState(false);
   const [message, setMessage] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -40,6 +40,7 @@ export function DetailSheet({ event, loading, saved, onClose, onToggleSaved, onS
   const accent = categoryColors[event.category];
   const shareUrl = eventLink(event.id);
 
+  /** Opens the current event coordinates in Google Maps. */
   const openMap = async () => {
     const { latitude, longitude } = event.location;
     try {
@@ -49,6 +50,7 @@ export function DetailSheet({ event, loading, saved, onClose, onToggleSaved, onS
     }
   };
 
+  /** Shares the event summary and app deep link using the platform share facility. */
   const shareEvent = async () => {
     setShareError(false);
     const text = `${event.name}\n${formatDate(event.starts_at)}\n${event.location.venue_name}\n在城迹 CityPulse 打开活动：\n${shareUrl}`;
@@ -64,6 +66,7 @@ export function DetailSheet({ event, loading, saved, onClose, onToggleSaved, onS
     }
   };
 
+  /** Validates the correction message and sends it through `onSubmitCorrection`. */
   const submit = async () => {
     setCorrectionNotice('');
     if (message.trim().length < 10) {
@@ -83,8 +86,7 @@ export function DetailSheet({ event, loading, saved, onClose, onToggleSaved, onS
     }
   };
 
-  const content = (
-      <View style={styles.container}>
+  return <View style={styles.container}>
         <View style={styles.topBar}>
           <Pressable accessibilityRole="button" accessibilityLabel="关闭活动详情" hitSlop={10} onPress={onClose}>
             <Text style={styles.close}>×</Text>
@@ -165,13 +167,14 @@ export function DetailSheet({ event, loading, saved, onClose, onToggleSaved, onS
           ))}
           {showCorrection ? (
             <View style={styles.correctionBox}>
-              <Text style={styles.correctionTitle}>哪里需要纠正？</Text>
+              <Text style={styles.correctionTitle}>哪里需要纠正？<RequiredMark /></Text>
+              <RequiredHint />
               <TextInput
                 accessibilityLabel="纠错说明"
                 multiline
                 onChangeText={setMessage}
                 placeholder="例如：活动已延期，官方页面显示新日期为……"
-                placeholderTextColor="#8A9996"
+                placeholderTextColor={colors.placeholder}
                 style={styles.input}
                 value={message}
               />
@@ -200,7 +203,7 @@ export function DetailSheet({ event, loading, saved, onClose, onToggleSaved, onS
               <Text style={styles.shareText}>分享活动</Text>
             </Pressable>
             <Pressable disabled={!event.official_url} onPress={() => Linking.openURL(event.official_url)} style={styles.officialButton}>
-              <Text style={styles.officialText}>{event.official_url ? '前往核验页面 ↗' : '测试活动 · 无官方页面'}</Text>
+              <Text style={styles.officialText}>{event.official_url ? '前往核验页面 ↗' : '暂无核验页面'}</Text>
             </Pressable>
           </View>
           {shareError && (
@@ -211,9 +214,7 @@ export function DetailSheet({ event, loading, saved, onClose, onToggleSaved, onS
           )}
           <Text style={styles.disclaimer}>报名、购票及变更信息请以主办方官方页面为准。</Text>
         </ScrollView>
-      </View>
-  );
-  return presentation === 'panel' ? content : <Modal animationType="slide" onRequestClose={onClose} presentationStyle="pageSheet" visible>{content}</Modal>;
+      </View>;
 }
 
 const styles = StyleSheet.create({

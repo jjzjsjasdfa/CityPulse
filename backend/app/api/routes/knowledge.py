@@ -148,7 +148,7 @@ def resolve_names(session, facts):
 @router.get('/event-search')
 def event_search(session: SessionDep, q: str = Query(default='', max_length=200), place: str = Query(default='', max_length=300),
                  offset: int = Query(default=0, ge=0), limit: int = Query(default=20, ge=1, le=50)):
-    statement = select(Event).where(Event.is_published.is_(True), Event.is_demo.is_(False))
+    statement = select(Event).where(Event.is_published.is_(True), Event.archived_at.is_(None))
     if q.strip():
         statement = statement.where(or_(Event.name.icontains(q.strip(), autoescape=True), Event.name.op('%')(q.strip()),
                                         Event.venue_name.icontains(q.strip(), autoescape=True)))
@@ -173,7 +173,7 @@ def favorites(session: SessionDep, user: UserDep, offset: int = Query(default=0,
 @router.put('/favorites/{event_id}')
 def favorite(event_id: UUID, session: SessionDep, user: UserDep):
     event = session.get(Event, event_id)
-    if not event or not event.is_published or event.is_demo:
+    if not event or not event.is_published or event.archived_at is not None:
         raise HTTPException(404, '活动不存在')
     add_favorite(session, user.id, event_id)
     session.commit()

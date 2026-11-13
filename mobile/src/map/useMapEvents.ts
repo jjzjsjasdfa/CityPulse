@@ -4,6 +4,7 @@ import { listMapEvents } from '../api/client';
 import type { MapEvent } from '../api/types';
 import { getMapLevel, type MapBounds } from './presentation';
 
+/** Loads map events for `bounds` while `active`, optionally filtered by `category`. */
 export function useMapEvents(bounds: MapBounds, active: boolean, category?: string) {
   const [points, setPoints] = useState<MapEvent[]>([]);
   const [loading, setLoading] = useState(false);

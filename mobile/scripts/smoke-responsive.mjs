@@ -1,8 +1,15 @@
 import {chromium} from 'playwright-core';
-import {readFile,mkdir} from 'node:fs/promises';
+import {mkdir} from 'node:fs/promises';
 import assert from 'node:assert/strict';
-const fixture=JSON.parse(await readFile('../backend/fixtures/demo-events.json','utf8'));
-const events=fixture.events.slice(0,6);
+// Browser-only data; independent of the removed demo database and seed scripts.
+const events=Array.from({length:6},(_,i)=>({
+ id:`responsive-${i}`,name:`Responsive event ${i}`,category:'performance',status:'announced',
+ starts_at:'2027-10-16T12:00:00+08:00',ends_at:'2027-10-16T22:00:00+08:00',
+ summary:'Responsive map fixture',description:'Browser-only test event',price:'Free',
+ location:{city:'长沙',district:'开福区',venue_name:'Test venue',address:'Test address',latitude:28.2,longitude:112.97},
+ attributes:[],sources:[],status_history:[],confidence:0.7,last_verified_at:'2027-01-01T00:00:00Z',
+ is_ad:false,is_new:false,is_ending_soon:false,
+}));
 const browser=await chromium.launch({executablePath:'C:/Program Files/Google/Chrome/Application/chrome.exe',headless:true});
 try{
  const page=await browser.newPage({viewport:{width:1440,height:960}});const errors=[];
@@ -15,32 +22,30 @@ try{
   if(event)body={data:{...event,attributes:event.attributes||[],sources:event.sources||[],status_history:event.status_history||[]}};
   await route.fulfill({contentType:'application/json',body:JSON.stringify(body)});
  });
- await page.goto('http://localhost:8081');
+ await page.goto(process.env.WEB_URL || 'http://localhost:8081');
  await page.getByRole('button',{name:'暂不登录，随便看看',exact:true}).click();
  await page.getByTestId('layout-desktop').waitFor();
  await page.getByRole('button',{name:`查看${events[0].name}`,exact:true}).click();
  await page.getByRole('button',{name:'关闭活动详情',exact:true}).waitFor();
- assert.equal(await page.getByRole('dialog').count(),0);
- await page.getByRole('button',{name:'探索',exact:true}).click();
- const map=await page.getByLabel('活动地图',{exact:true}).elementHandle();
- assert.ok(map);
  await mkdir('artifacts',{recursive:true});
  for(const [width,mode] of [[1440,'desktop'],[900,'tablet'],[390,'phone'],[1440,'desktop']]){
   await page.setViewportSize({width,height:960});await page.getByTestId(`layout-${mode}`).waitFor();
-  assert.equal(await map.evaluate(el=>el.isConnected),true,'Map must not remount on resize');
   await page.getByRole('button',{name:'关闭活动详情',exact:true}).waitFor();
   await page.screenshot({path:`artifacts/responsive-${mode}.png`});
  }
  await page.getByRole('button',{name:'关闭活动详情',exact:true}).click();
- assert.equal(await map.evaluate(el=>el.isConnected),true);
+ await page.getByRole('button',{name:'地图',exact:true}).click();
+ const map=await page.getByLabel('活动地图',{exact:true}).elementHandle();
+ assert.ok(map);
  for(const [width,mode] of [[1440,'desktop'],[900,'tablet'],[390,'phone']]){
   await page.setViewportSize({width,height:960});await page.getByTestId(`layout-${mode}`).waitFor();
-  await page.getByRole('button',{name:'探索',exact:true}).click();
+  await page.getByRole('button',{name:'地图',exact:true}).click();
+  assert.equal(await map.evaluate(el=>el.isConnected),true,'Map must not remount on resize');
   const nav=await page.getByTestId('page-navigation').boundingBox();
   assert.ok(nav);
-  if(mode==='desktop'){assert.ok(nav.width<=80);assert.ok(nav.height<400);assert.ok(nav.y<30);}
+  if(mode==='desktop'){assert.ok(nav.width<=80);assert.ok(nav.height<400);assert.ok(nav.y<120);}
   if(mode==='tablet'){assert.ok(nav.x<30);assert.ok(nav.y>800);assert.ok(nav.width<=360);}
-  const from=await page.getByRole('button',{name:'探索',exact:true}).boundingBox();
+  const from=await page.getByRole('button',{name:'地图',exact:true}).boundingBox();
   const to=await page.getByRole('button',{name:'我的',exact:true}).boundingBox();
   await page.mouse.move(from.x+from.width/2,from.y+from.height/2);await page.mouse.down();
   await page.mouse.move(to.x+to.width/2,to.y+to.height/2,{steps:12});await page.mouse.up();

@@ -31,7 +31,7 @@
 请求中断或分页失败不会跳过尚未获取的新活动。
 
 未读活动和已读键保存在本机。重启后恢复未读指引，重复查询同一发布版本不会再次提醒。
-没有把演示数据当成真实新活动通知；附近接口不可用时会提示并稍后重试。
+附近接口不可用时会提示并稍后重试。
 
 ## 八方向动画
 
@@ -55,7 +55,7 @@
 
 ## 参数位置
 
-启动亮起 0.5 秒、调试时间与正式模式隔离见 [DEBUG_SETTINGS.md](DEBUG_SETTINGS.md)。
+启动亮起 0.5 秒。
 
 | 参数 | 位置 |
 | --- | --- |
@@ -79,14 +79,7 @@ npm run test:map
 npm run test:guidance
 npx expo export --platform web
 npm run preview:map
-# 在另一个终端
-npm run smoke:demo
 ```
-
-当前 200 条数据测试模式及启动方式见 [DEMO_DATA.md](DEMO_DATA.md)。
-浏览器测试使用临时位置和活动，不读取用户真实位置。测试包含默认居中与比例尺、
-多页附近活动、分页失败恢复、八方向多色波浪、从标记开始拖动、方向切换、复位、已读渐隐、重启去重、运行中新增活动、
-减少动态效果和定位拒绝。截图在 `mobile/artifacts/guidance-*.png`。
 
 后端运行 `uv run pytest`、`uv run ruff check app tests`。接口测试使用模拟会话检查
 查询条件和响应契约；实际 PostGIS 执行、GPS 精度、原生地图标记及动画帧率仍需真机验证。

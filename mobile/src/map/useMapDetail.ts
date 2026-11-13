@@ -3,6 +3,7 @@ import { mapDetail } from './presentation';
 
 // One shared interpolation for the whole marker layer. New zoom input retargets
 // the current frame, so reversing a pinch never restarts an animation at zero.
+/** Animates marker detail levels as viewport `widthKm` changes. */
 export function useMapDetail(widthKm: number) {
   const [detail, setDetail] = useState(() => mapDetail(widthKm));
   const current = useRef(detail);
@@ -10,6 +11,7 @@ export function useMapDetail(widthKm: number) {
     const target = mapDetail(widthKm);
     if (Math.max(Math.abs(current.current.name-target.name), Math.abs(current.current.category-target.category), Math.abs(current.current.unsaved-target.unsaved)) < 0.002) return;
     let frame = 0, last = 0;
+    /** Advances the interpolation using animation-frame timestamp `time`. */
     const tick = (time: number) => {
       const amount = 1 - Math.exp(-Math.min(last ? time - last : 16, 64) / 90);
       last = time;

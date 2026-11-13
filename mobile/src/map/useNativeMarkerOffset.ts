@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { Animated, Easing, Platform } from 'react-native';
 import type { MapMarker } from 'react-native-maps';
 
-/** Animate only a layout relocation; native map panning never depends on JS. */
+/** Animates marker offset `dx`,`dy`; `width`/`height` convert it to native anchor values. */
 export function useNativeMarkerOffset(marker: React.RefObject<MapMarker | null>, dx: number, dy: number, width: number, height: number) {
   const value = useRef(new Animated.ValueXY({x:dx,y:dy})).current;
   const previous = useRef({x:dx,y:dy});

@@ -15,7 +15,7 @@ SessionDep = Annotated[Session, Depends(get_session)]
 def create_correction(payload: CorrectionCreate, session: SessionDep) -> CorrectionResponse:
     if payload.event_id is not None:
         event = session.get(Event, payload.event_id)
-        if event is None or not event.is_published or event.is_demo:
+        if event is None or not event.is_published:
             raise HTTPException(status_code=404, detail="Event not found")
 
     correction = Correction(

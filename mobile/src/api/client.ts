@@ -2,10 +2,8 @@ import Constants from 'expo-constants';
 import { readSession, writeSession } from './sessionStorage';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
-import { demoApiURL } from './demoHost';
-import { DEMO_MODE, demoQuery, appNow, nearbyRadius } from '../demo';
-import type { AdminEventDetail, AdminEventUpdate, EventRevision, AdminCorrection, CorrectionReview, CandidateComparison } from './types';
-import type { ApiErrorEnvelope, Candidate, CandidateApproval, CandidateStatus, EventDetail, EventPage, LoginResponse, MapEvent, User } from './types';
+import type { AdminCorrection, AdminCorrectionSummary, AdminEventAction, AdminEventCreate, AdminEventDetail, AdminEventPage, AdminEventUpdate, AdminUserCreate, AdminUserDetail, AdminUserPage, AdminUserRevision, AdminUserUpdate, CandidateComparison, CorrectionReview, EventRevision, UserRole } from './types';
+import type { ApiErrorEnvelope, Candidate, CandidateApproval, CandidateStatus, CandidateSummary, EventDetail, EventPage, LoginResponse, MapEvent, User } from './types';
 import type { MapEventsResponse, NearbyEvent, NearbyEventsResponse } from './types';
 import type { Coordinate } from '../map/geo';
 import { loadMapPages } from '../map/loadPages';
@@ -34,6 +32,7 @@ function persistSession(value: string | null) {
   return storageWrites;
 }
 let onUnauthorized: (() => void) | undefined;
+/** Sets the callback run when an authenticated request receives HTTP 401. */
 export function setAuthHandler(handler: () => void) { onUnauthorized = handler; }
 export function clearSession() { accessToken = null; void persistSession(null).catch(() => undefined); }
 
@@ -65,11 +64,9 @@ function developmentHost() {
   return emulatorHost;
 }
 export const realApiURL = () => process.env.EXPO_PUBLIC_API_URL ?? `http://${developmentHost()}:8000/api/v1`;
-export const apiURL = () => DEMO_MODE ? demoApiURL(process.env.EXPO_PUBLIC_DEMO_API_URL, Constants.expoConfig?.hostUri, Platform.OS,
-  Platform.OS === 'web' && typeof window !== 'undefined' ? window.location.hostname : undefined) :
-  realApiURL();
-export const demoURL = (path: string) => `${apiURL()}${path}${path.includes('?') ? '&' : '?'}${demoQuery()}`;
+export const apiURL = realApiURL;
 
+/** Error raised for non-success API responses; `status` is the HTTP status code. */
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -81,15 +78,13 @@ export class ApiError extends Error {
 
 export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const requestToken = accessToken;
-  const real = !DEMO_MODE || path.startsWith('/auth/');
-  if (DEMO_MODE && path.startsWith('/admin/')) throw new ApiError('调试已开启，暂无法审批。请关闭调试后继续。', 409);
-  const response = await fetch(real ? `${realApiURL()}${path}` : demoURL(path), {
+  const response = await fetch(`${apiURL()}${path}`, {
     ...init,
-    headers: { 'Content-Type': 'application/json', ...(real && accessToken ? { Authorization: `Bearer ${accessToken}` } : {}), ...init?.headers },
+    headers: { 'Content-Type': 'application/json', ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}), ...init?.headers },
   });
   if (!response.ok) {
     const payload = (await response.json().catch(() => ({}))) as ApiErrorEnvelope;
-    if (response.status === 401 && real && requestToken && requestToken === accessToken) {
+    if (response.status === 401 && requestToken && requestToken === accessToken) {
       clearSession();
       onUnauthorized?.();
     }
@@ -100,29 +95,38 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return response.status === 204 ? undefined as T : (await response.json()) as T;
 }
 
+/** Signs in with `email` and `password`, then keeps the returned token in memory. */
 export async function signIn(email: string, password: string): Promise<LoginResponse> {
   const result = await request<LoginResponse>('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) });
   accessToken = result.access_token;
   await rememberSession(result);
   return result;
 }
+/** Creates an account using the supplied `email` and `password`. */
 export async function register(email: string, password: string): Promise<User> {
   return request<User>('/auth/register', { method: 'POST', body: JSON.stringify({ email, password }) });
 }
+/** Ends the backend session and clears the local in-memory token. */
 export async function signOut(): Promise<void> {
   await request('/auth/logout', { method: 'POST' });
   clearSession();
   await storageWrites;
 }
-export function listCandidates(status: CandidateStatus, offset = 0): Promise<Candidate[]> {
+/** Lists candidate summaries filtered by workflow `status`, starting at `offset`. */
+export function listCandidates(status: CandidateStatus, offset = 0): Promise<CandidateSummary[]> {
   return request(`/admin/candidates?status=${status}&offset=${offset}&limit=20`);
 }
+/** Loads the complete candidate identified by `id`. */
+export function getCandidate(id: string): Promise<Candidate> { return request(`/admin/candidates/${id}`); }
+/** Accepts candidate `id`; `input` contains reviewed event fields and concurrency data. */
 export function approveCandidate(id: string, input: CandidateApproval): Promise<Candidate> {
   return request(`/admin/candidates/${id}/approve`, { method: 'POST', body: JSON.stringify(input) });
 }
+/** Rejects `candidate` with the administrator's required `review_note`. */
 export function rejectCandidate(candidate: Candidate, review_note: string): Promise<Candidate> {
   return request(`/admin/candidates/${candidate.id}/reject`, { method: 'POST', body: JSON.stringify({ review_note, expected_updated_at: candidate.updated_at }) });
 }
+/** Asks the backend to enrich `candidate` from its source detail page. */
 export function enrichCandidate(candidate: Candidate): Promise<Candidate> {
   return request(`/admin/candidates/${candidate.id}/enrich`, { method: 'POST', body: JSON.stringify({ expected_updated_at: candidate.updated_at }) });
 }
@@ -136,6 +140,7 @@ export interface EventFilters {
   when?: 'any' | 'today' | 'weekend';
 }
 
+/** Lists public events; `filters` controls category, date, sort, page, and search text. */
 export async function listEvents(filters: EventFilters = {}): Promise<EventPage> {
   const params = new URLSearchParams({ city: '长沙', page_size: '50' });
   if (filters.category) params.set('category', filters.category);
@@ -147,33 +152,81 @@ export async function listEvents(filters: EventFilters = {}): Promise<EventPage>
   return request<EventPage>(`/events?${params.toString()}`);
 }
 
+/** Loads source-versus-candidate fields for candidate `id` during admin review. */
 export function candidateComparison(id: string): Promise<CandidateComparison> {
   return request(`/admin/candidates/${id}/comparison`);
 }
-export function listAdminEvents(offset = 0, q = '', published?: boolean): Promise<AdminEventDetail[]> {
+/** Lists admin events using page `offset`, query `q`, and publication/archive filters. */
+export function listAdminEvents(offset = 0, q = '', published?: boolean, archived = false): Promise<AdminEventPage> {
   const params = new URLSearchParams({ offset: String(offset), limit: '20', q });
   if (published !== undefined) params.set('published', String(published));
+  params.set('archived', String(archived));
   return request(`/admin/events?${params}`);
 }
+/** Creates an event from the validated admin form `body`. */
+export function createAdminEvent(body: AdminEventCreate): Promise<AdminEventDetail> {
+  return request('/admin/events', { method: 'POST', body: JSON.stringify(body) });
+}
+/** Loads full admin detail for event `id`. */
 export function getAdminEvent(id: string): Promise<AdminEventDetail> { return request(`/admin/events/${id}`); }
+/** Replaces editable fields for event `id` with `body`. */
 export function updateAdminEvent(id: string, body: AdminEventUpdate): Promise<AdminEventDetail> {
   return request(`/admin/events/${id}`, { method: 'PUT', body: JSON.stringify(body) });
 }
+/** Archives or restores event `id`; `body` carries the note and expected version. */
+export function setAdminEventArchived(id: string, archived: boolean, body: AdminEventAction): Promise<AdminEventDetail> {
+  return request(`/admin/events/${id}/${archived ? 'archive' : 'restore'}`, { method: 'POST', body: JSON.stringify(body) });
+}
+/** Lists change-history entries for event `id`, beginning at `offset`. */
 export function eventRevisions(id: string, offset = 0): Promise<EventRevision[]> {
   return request(`/admin/events/${id}/revisions?offset=${offset}&limit=20`);
 }
-export function listCorrections(status: AdminCorrection['status'], offset = 0): Promise<AdminCorrection[]> {
+/** Lists correction summaries with workflow `status`, beginning at `offset`. */
+export function listCorrections(status: AdminCorrection['status'], offset = 0): Promise<AdminCorrectionSummary[]> {
   return request(`/admin/corrections?status=${status}&offset=${offset}&limit=20`);
 }
+/** Loads correction `id` together with its related event data. */
+export function getAdminCorrection(id: string): Promise<AdminCorrection> { return request(`/admin/corrections/${id}`); }
+/** Moves correction `id` to the state and optional event update described by `body`. */
 export function reviewCorrection(id: string, body: CorrectionReview): Promise<AdminCorrection> {
   return request(`/admin/corrections/${id}/review`, { method: 'POST', body: JSON.stringify(body) });
 }
+/** Lists users using page `offset`, search `q`, and optional role/active filters. */
+export function listAdminUsers(offset = 0, q = '', role?: UserRole, active?: boolean): Promise<AdminUserPage> {
+  const params = new URLSearchParams({ offset: String(offset), limit: '20', q });
+  if (role !== undefined) params.set('role', role);
+  if (active !== undefined) params.set('active', String(active));
+  return request(`/admin/users?${params}`);
+}
+/** Loads full admin detail for user `id`. */
+export function getAdminUser(id: string): Promise<AdminUserDetail> { return request(`/admin/users/${id}`); }
+/** Creates a user from the admin form `body`. */
+export function createAdminUser(body: AdminUserCreate): Promise<AdminUserDetail> {
+  return request('/admin/users', { method: 'POST', body: JSON.stringify(body) });
+}
+/** Updates user `id` with `body`, including its expected version timestamp. */
+export function updateAdminUser(id: string, body: AdminUserUpdate): Promise<AdminUserDetail> {
+  return request(`/admin/users/${id}`, { method: 'PUT', body: JSON.stringify(body) });
+}
+/** Invalidates all active login sessions belonging to user `id`. */
+export function revokeAdminUserSessions(id: string): Promise<void> {
+  return request(`/admin/users/${id}/revoke-sessions`, { method: 'POST' });
+}
+/** Lists audit-history entries for user `id`, beginning at `offset`. */
+export function adminUserRevisions(id: string, offset = 0): Promise<AdminUserRevision[]> {
+  return request(`/admin/users/${id}/revisions?offset=${offset}&limit=20`);
+}
 
+/** Loads public detail for event `id`; `signal` can cancel an obsolete request. */
 export async function getEvent(id: string, signal?: AbortSignal): Promise<EventDetail> {
   const response = await request<{ data: EventDetail }>(`/events/${id}`, { signal });
   return response.data;
 }
 
+/**
+ * Loads every map page inside `bounds`.
+ * `category` filters results, `signal` cancels work, and `onPage` reports accumulated points.
+ */
 export async function listMapEvents(
   bounds: MapBounds,
   category?: string,
@@ -198,6 +251,7 @@ export async function listMapEvents(
   return [...points.values()];
 }
 
+/** Submits `input` as a user correction containing an event, kind, and message. */
 export async function submitCorrection(input: {
   event_id: string;
   kind: string;
@@ -206,10 +260,9 @@ export async function submitCorrection(input: {
   await request('/corrections', { method: 'POST', body: JSON.stringify(input) });
 }
 
+/** Loads nearby events around `position` published after `since`; `signal` cancels polling. */
 export async function listNearbyUpdates(position: Coordinate, since: string | null, signal: AbortSignal) {
-  const radius = nearbyRadius();
-  if (radius === 0) return { events: [], checkedAt: new Date(appNow()).toISOString() };
-  const params = new URLSearchParams({ latitude: String(position.latitude), longitude: String(position.longitude), radius_km: String(radius), limit: '500' });
+  const params = new URLSearchParams({ latitude: String(position.latitude), longitude: String(position.longitude), radius_km: '7', limit: '500' });
   if (since) params.set('since', since);
   const events = new Map<string, NearbyEvent>();
   let offset = 0;

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { EventCategory } from '../api/types';
 import { signalColors } from '../theme';
 export const HALO_DURATION = 60000;
+/** Draws a CSS halo for event `id` in its category color until `until`. */
 export function ActivityHalo({ id, category, until }: { id: string; category: EventCategory; until: number }) {
   const [expired, setExpired] = useState(() => until <= Date.now());
   const delay = useMemo(() => `${-Math.max(0, HALO_DURATION-(until-Date.now()))/1000}s`, [until]);

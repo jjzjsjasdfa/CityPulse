@@ -6,9 +6,16 @@ from zoneinfo import ZoneInfo
 import httpx
 import pytest
 
-from app.ingestion.registry import adapter_keys
-from app.ingestion.showstart import ShowStartVenueAdapter, parse_showstart_venue
-from app.ingestion.showstart_detail import parse_showstart_detail, parse_times
+from app.ingestion.http import SourceHttpClient
+from app.ingestion.listing import HtmlListingAdapter
+from app.ingestion.places import VenueLookup
+from app.ingestion.registry import adapter_keys, build_job
+from app.ingestion.showstart import SHOWSTART, parse_showstart_venue
+from app.ingestion.showstart_detail import (
+    ShowStartDetailEnricher,
+    parse_showstart_detail,
+    parse_times,
+)
 from app.ingestion.types import IngestionItem
 from app.models import EventCategory, SourceLevel
 
@@ -30,15 +37,31 @@ def test_parse_real_showstart_card_shape() -> None:
 
 
 def test_showstart_is_registered_as_a_non_official_lead() -> None:
-    assert ShowStartVenueAdapter.source.key in adapter_keys()
-    assert ShowStartVenueAdapter.source.level == SourceLevel.lead
-    assert ShowStartVenueAdapter.source.is_official is False
+    assert adapter_keys() == [SHOWSTART.source.key]
+    assert SHOWSTART.source.level == SourceLevel.lead
+    assert SHOWSTART.source.is_official is False
+
+
+def test_showstart_job_composes_discovery_detail_and_shared_place_lookup() -> None:
+    job = build_job(SHOWSTART.source.key)
+    try:
+        assert isinstance(job.adapter, HtmlListingAdapter)
+        assert job.adapter.definition is SHOWSTART
+        assert [type(enricher) for enricher in job.pipeline.enrichers] == [
+            ShowStartDetailEnricher,
+            VenueLookup,
+        ]
+    finally:
+        job.close()
 
 
 def test_legacy_contact_placeholder_uses_truthful_product_identifier():
-    with ShowStartVenueAdapter(user_agent="CityPulse/0.1 (contact-required)") as adapter:
-        assert adapter.user_agent == "CityPulse/0.1"
-        assert adapter.client.headers["User-Agent"] == "CityPulse/0.1"
+    with SourceHttpClient(
+        user_agent="CityPulse/0.1 (contact-required)", fallback_user_agent="CityPulse/0.1"
+    ) as http:
+        HtmlListingAdapter(SHOWSTART, http)
+        assert http.user_agent == "CityPulse/0.1"
+        assert http.client.headers["User-Agent"] == "CityPulse/0.1"
 
 
 def detail_item():
@@ -97,18 +120,19 @@ def test_invalid_coordinates_and_remote_script_are_not_executed():
 
 
 def test_detail_failure_keeps_listing_facts_and_disallows_external_fetch():
-    with ShowStartVenueAdapter(user_agent="CityPulse test suite") as adapter:
-        adapter.client.close()
+    with SourceHttpClient(user_agent="CityPulse test suite") as http:
+        http.client.close()
         requests = []
 
         def respond(request):
             requests.append(str(request.url))
             return httpx.Response(404 if request.url.path == "/robots.txt" else 503)
 
-        adapter.client = httpx.Client(transport=httpx.MockTransport(respond))
-        result = adapter.enrich(detail_item())
+        http.client = httpx.Client(transport=httpx.MockTransport(respond))
+        enricher = ShowStartDetailEnricher(http)
+        result = enricher.enrich(detail_item())
         assert result.starts_at == detail_item().starts_at
         assert result.facts["enrichment"]["detail_status"] == "unavailable"
         with pytest.raises(ValueError, match="canonical"):
-            adapter.enrich(replace(detail_item(), canonical_url="http://127.0.0.1/private"))
+            enricher.enrich(replace(detail_item(), canonical_url="http://127.0.0.1/private"))
         assert len(requests) == 2

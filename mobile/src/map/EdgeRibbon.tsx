@@ -5,6 +5,7 @@ import type { GlowState } from './guidance';
 import type { MapSize } from './geo';
 import { ribbonColor, ribbonGeometry } from './ribbon';
 
+/** Draws the colored edge ribbon from animated `glows` and startup-intro state. */
 export function EdgeRibbon({ size, glows, seconds, intro, categories, reduced }: {
   size: MapSize; glows: GlowState[]; seconds: number; intro: number; categories: EventCategory[]; reduced: boolean;
 }) {

@@ -1,6 +1,7 @@
 import { Text, TextInput, View } from 'react-native';
 import { DateTimeInput } from './DateTimeInput';
 import { LocationPreview } from './LocationPreview';
+import { RequiredHint, RequiredMark } from './RequiredField';
 import { colors } from '../theme';
 
 export const eventFields = [
@@ -12,13 +13,18 @@ export const eventFields = [
 ] as const;
 export type EventField = typeof eventFields[number][0];
 export type EventDraft = Record<EventField, string>;
+/**
+ * Renders editable fields from `draft` and reports changes by field name.
+ * `missing` marks invalid fields, while `source` shows imported values for comparison.
+ */
 export function EventFields({ draft, onChange, disabled, missing = [], source }: {
   draft: EventDraft; onChange: (field: EventField, value: string) => void;
   disabled?: boolean; missing?: EventField[]; source?: EventDraft;
 }) {
   return <>
+    <RequiredHint detail={source ? '通过并公开时需填写所有必填项；拒绝时只需填写审核记录 / 拒绝原因。' : undefined} />
     {eventFields.map(([key, label]) => <View key={key}>
-      <Text style={{ color: colors.ink, fontWeight: '700', marginTop: 12, marginBottom: 6 }}>{label}</Text>
+      <Text style={{ color: colors.ink, fontWeight: '700', marginTop: 12, marginBottom: 6 }}>{label}{key !== 'price' && <RequiredMark />}</Text>
       {source && key !== 'review_note' && <Text style={{ color: colors.inkMuted, marginBottom: 4 }}>
         {!source[key] ? '来源未提供 · 待人工核实' : draft[key] === source[key] ? '来源已采集 · 待核实' : '人工修改 · 请核对来源'}
       </Text>}

@@ -3,18 +3,18 @@ import { AccessibilityInfo, AppState, StyleSheet, View } from 'react-native';
 import { EdgeRibbon } from './EdgeRibbon';
 
 import type { EventCategory, NearbyEvent } from '../api/types';
-import { appNow, nearbyRadius } from '../demo';
 import { updateKey } from './nearbyState';
 import { advanceGlows, DIRECTIONS, guidanceTargets, type GlowState } from './guidance';
 import { getMapLevel, boundsFromRegion, type MapRegion, type MapSession } from './presentation';
 import { distanceKm, type Coordinate, type MapSize } from './geo';
 
+/** Animates edge guidance for nearby `events` relative to device `position` and map `viewport`. */
 export function EdgeGuidance({ session, events, position, viewport, size, onSeen, renderedIds, topInset = 120 }: {
   session: MapSession;
   events: NearbyEvent[]; position: Coordinate | null; viewport: RefObject<MapRegion>;
   size: MapSize; onSeen: (ids: string[]) => void; renderedIds: ReadonlySet<string>; topInset?: number;
 }) {
-  const radius = nearbyRadius();
+  const radius = 7;
   const distances = useMemo(() => new Map(events.map((event) => [event.id, position ? distanceKm(position, event) : Infinity])), [events, position?.latitude, position?.longitude]);
   const latest = useRef({ events, position, size, onSeen, renderedIds, topInset, distances, radius });
   latest.current = { events, position, size, onSeen, renderedIds, topInset, distances, radius };
@@ -29,12 +29,13 @@ export function EdgeGuidance({ session, events, position, viewport, size, onSeen
     return () => sub.remove();
   }, []);
   const running = Boolean(position && radius > 0 && events.some((event) => distances.get(event.id)! <= radius &&
-    Date.parse(event.ends_at) > appNow() && !['ended', 'cancelled', 'postponed'].includes(event.status)));
+    Date.parse(event.ends_at) > Date.now() && !['ended', 'cancelled', 'postponed'].includes(event.status)));
   useEffect(() => {
     let animation = 0, last = 0, glows = glowState.current;
     let paused = Boolean(AppState.currentState && AppState.currentState !== 'active');
     const entered = new Map<string, number>();
     const acknowledged = new Set<string>();
+    /** Advances guidance animation and acknowledges events held in the central map area. */
     const tick = (time: number) => {
       if (paused) { animation = 0; return; }
       animation = requestAnimationFrame(tick);
@@ -44,13 +45,13 @@ export function EdgeGuidance({ session, events, position, viewport, size, onSeen
       const input = latest.current;
       if (!session.introPlayed && input.position && running) {
         session.introPlayed = true; introStart.current = time;
-        const categories = [...new Set(input.events.filter((event) => input.distances.get(event.id)! <= input.radius && Date.parse(event.ends_at) > appNow()).map((event) => event.category))];
+        const categories = [...new Set(input.events.filter((event) => input.distances.get(event.id)! <= input.radius && Date.parse(event.ends_at) > Date.now()).map((event) => event.category))];
         introCategories.current = categories;
       }
       const age = introStart.current == null ? Infinity : time - introStart.current;
       const intro = age < 500 ? 1 : Math.max(0, 1 - (age - 500) / 1000) ** 2;
       const shown = getMapLevel(boundsFromRegion(viewport.current)) !== 'saved';
-      const result = guidanceTargets(input.events, input.position, viewport.current, input.size, appNow(), input.topInset, shown, input.renderedIds, input.radius, input.distances);
+      const result = guidanceTargets(input.events, input.position, viewport.current, input.size, Date.now(), input.topInset, shown, input.renderedIds, input.radius, input.distances);
       const central = new Set(shown ? result.central : []);
       const versions = new Map(input.events.map((event) => [event.id, updateKey(event)]));
       const centralVersions = new Set([...central].map((key) => versions.get(key)!));

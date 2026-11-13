@@ -22,6 +22,7 @@ interface Props {
   onChange: (value: FilterValue) => void;
 }
 
+/** Shows feed filter chips; `value` is selected and `onChange` receives the next filter. */
 export function FilterBar({ value, onChange }: Props) {
   return (
     <ScrollView

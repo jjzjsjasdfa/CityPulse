@@ -8,13 +8,18 @@ from html.parser import HTMLParser
 from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo
 
+import httpx
+
 from app.ingestion.common import HTML_VOID_ELEMENTS, normalize_text
 from app.ingestion.coordinates import to_wgs84
 from app.ingestion.enrichment_types import EnrichmentInfo, SourceCoordinates
+from app.ingestion.http import SourceHttpClient
 from app.ingestion.types import IngestionItem
 
 SHANGHAI = ZoneInfo("Asia/Shanghai")
 DATE = re.compile(r"(?:(\d{4})[年/-])?(\d{1,2})[月/-](\d{1,2})日?\s+(\d{1,2}):(\d{2})")
+SHOWSTART_EVENT_PATH = re.compile(r"^/event/(?P<id>\d+)$")
+SHOWSTART_HOST = "www.showstart.com"
 
 
 class DetailHTML(HTMLParser):
@@ -212,3 +217,30 @@ def parse_showstart_detail(html: str, item: IngestionItem) -> IngestionItem:
         except (ValueError, TypeError):
             info.warnings.append("来源场馆坐标无效，请核实地点。")
     return replace(item, **values, facts={**item.facts, "enrichment": info.model_dump()})
+
+
+class ShowStartDetailEnricher:
+    """Fetch ShowStart detail facts while preserving usable listing data on outages."""
+
+    def __init__(self, http: SourceHttpClient) -> None:
+        self.http = http
+
+    def enrich(self, item: IngestionItem) -> IngestionItem:
+        parts = urlsplit(item.canonical_url)
+        if (
+            parts.scheme != "https"
+            or parts.netloc != SHOWSTART_HOST
+            or not SHOWSTART_EVENT_PATH.fullmatch(parts.path)
+            or parts.query
+            or parts.fragment
+        ):
+            raise ValueError("Only canonical Showstart event URLs are supported")
+        try:
+            response = self.http.get(item.canonical_url)
+            return parse_showstart_detail(response.text, item)
+        except (httpx.HTTPError, ValueError, RuntimeError):
+            # Leave listing facts intact; never guess from ticket sale dates or another event.
+            info = EnrichmentInfo.model_validate(item.facts.get("enrichment", {}))
+            info.detail_status = "unavailable"
+            info.warnings = ["暂时无法读取详情页，已保留此前采集的字段，请稍后重试。"]
+            return replace(item, facts={**item.facts, "enrichment": info.model_dump()})

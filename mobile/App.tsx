@@ -1,26 +1,25 @@
+import { allFavorites, saveFavorite } from './src/api/knowledge';
+import { KnowledgeProvider } from './src/components/Knowledge';
+import { SettingsScreen } from './src/screens/SettingsScreen';
+import { layoutForWidth } from './src/layout';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import {allFavorites,saveFavorite} from './src/api/knowledge';
-import {KnowledgeProvider} from './src/components/Knowledge';
+import { NavigationContainer } from '@react-navigation/native';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AccessibilityInfo, Alert, Animated, AppState, Linking, PanResponder, Platform, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
-import { layoutForWidth } from './src/layout';
+import { ActivityIndicator, Alert, AppState, useWindowDimensions, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { clearSession, demoURL, getEvent, listEvents, renewSession, restoreSession, setAuthHandler, signOut, submitCorrection } from './src/api/client';
-import { configureDebug, DEFAULT_SETTINGS, DEMO_MODE, storageKey, type DebugSettings } from './src/demo';
-import { SettingsScreen } from './src/screens/SettingsScreen';
+import { clearSession, getEvent, listEvents, renewSession, restoreSession, setAuthHandler, signOut, submitCorrection } from './src/api/client';
 import { useActivityAlerts } from './src/map/useActivityAlerts';
-import { PerformanceMonitor } from './src/map/PerformanceMonitor';
-import Svg, { Circle, Path } from 'react-native-svg';
-import type { EventDetail, EventSummary, LoginResponse } from './src/api/types';
+import type { EventDetail, EventSummary, LoginResponse, MapEvent } from './src/api/types';
 import { DetailSheet } from './src/components/DetailSheet';
 import type { FilterValue } from './src/components/FilterBar';
-import { eventIdFromLink } from './src/eventLinks';
 import { boundsFromRegion, INITIAL_REGION, toMapPoint, type MapBounds, type MapSession } from './src/map/presentation';
 import { useMapEvents } from './src/map/useMapEvents';
 import { useDeviceLocation } from './src/map/useDeviceLocation';
 import { useNearbyUpdates } from './src/map/useNearbyUpdates';
+import { AppTabs, FloatingTabBar, linking, navigationRef, RootStack, type AppTabParamList, type RootStackParamList } from './src/navigation';
 import { FeedScreen } from './src/screens/FeedScreen';
 import { MapScreen } from './src/screens/MapScreen';
 import { SavedScreen } from './src/screens/SavedScreen';
@@ -28,8 +27,7 @@ import { LoginScreen } from './src/screens/LoginScreen';
 import { AdminWorkspace } from './src/screens/AdminWorkspace';
 import { colors } from './src/theme';
 
-type Tab = 'feed' | 'map' | 'saved' | 'settings' | 'admin';
-const SETTINGS_KEY = '@citypulse/settings-v1';
+/** Application root: owns authentication and mounts the signed-in navigation tree. */
 
 export default function App() {
   const [auth, setAuth] = useState<LoginResponse | null>(null);
@@ -42,8 +40,8 @@ export default function App() {
   };
   useEffect(() => { void restore(); }, []);
   const [guest, setGuest] = useState(false);
-  const [startTab,setStartTab]=useState<Tab>('feed');
-  const endSession = () => { clearSession(); configureDebug({...DEFAULT_SETTINGS, enabled:false}); setSettings(current=>current?{...current,enabled:false}:current); setAuth(null); setGuest(true); };
+  const [startTab,setStartTab]=useState<keyof AppTabParamList>('Feed');
+  const endSession = () => { clearSession(); setAuth(null); setGuest(true); };
   useEffect(() => { setAuthHandler(endSession); }, []);
   useEffect(() => {
     if (!auth) return;
@@ -61,42 +59,13 @@ export default function App() {
     return () => { active = false; clearInterval(timer); subscription.remove(); };
   }, [auth?.access_token]);
   const logout = async () => { await signOut(); endSession(); };
-  const [settings, setSettings] = useState<DebugSettings | null>(null);
-  const [revision, setRevision] = useState(0);
-  useEffect(() => { void AsyncStorage.getItem(SETTINGS_KEY).then((value) => {
-    let next = DEFAULT_SETTINGS;
-    try { const saved = JSON.parse(value ?? 'null'); if (typeof saved?.enabled === 'boolean') next = { enabled: saved.enabled, time: typeof saved.time === 'string' && Number.isFinite(Date.parse(saved.time)) ? saved.time : null,
-      radiusKm: Number.isFinite(saved.radiusKm) ? (saved.radiusKm === 15 && saved.cycleSeconds == null ? 7 : Math.max(0,Math.min(30,saved.radiusKm))) : 7, monitor: saved.monitor !== false,
-      cycleSeconds: Number.isFinite(saved.cycleSeconds) ? Math.max(0.5, Math.min(5, saved.cycleSeconds)) : 1 }; } catch {}
-    next = {...next, enabled:false}; configureDebug(next); setSettings(next);
-  }).catch(() => { configureDebug({...DEFAULT_SETTINGS,enabled:false}); setSettings({...DEFAULT_SETTINGS,enabled:false}); }); }, []);
-  const apply = async (next: DebugSettings, replay = false) => {
-    if(auth?.user.role!=='admin') return;
-    await AsyncStorage.setItem(SETTINGS_KEY, JSON.stringify(next));
-    // Unmount old subscriptions before switching clock, API and storage namespace.
-    setSettings(null);
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    configureDebug(next);
-    try { if (next.enabled) {
-      // Rewinding time invalidates an incremental-query watermark.
-      if (replay || settings?.time !== next.time) await AsyncStorage.multiRemove([storageKey('nearby-updates-v2'), storageKey('activity-alerts-v1')]);
-      else if (settings?.radiusKm !== next.radiusKm) {
-        const raw = await AsyncStorage.getItem(storageKey('nearby-updates-v2'));
-        if (raw) { const record = JSON.parse(raw); record.watermark = null; await AsyncStorage.setItem(storageKey('nearby-updates-v2'), JSON.stringify(record)); }
-      }
-      if (replay) {
-        try { const response = await fetch(demoURL('/demo/publish'), { method: 'POST' }); if (!response.ok) throw new Error(); }
-        catch { Alert.alert('测试服务未连接', '设置已应用，模拟发布失败。请启动测试 API 后重试。'); }
-      }
-    } } finally { setRevision((r) => r + 1); setSettings(next); }
-  };
-  if (!settings || !authReady) return <View style={{ flex: 1, backgroundColor: colors.paper, justifyContent:'center', alignItems:'center', gap:16 }}>
+  if (!authReady) return <View style={{ flex: 1, backgroundColor: colors.paper, justifyContent:'center', alignItems:'center', gap:16 }}>
     <Text>{restoreError ? '暂时无法连接账号服务，登录信息已保留。' : '正在恢复登录状态…'}</Text>
     {restoreError && <><Pressable accessibilityRole="button" onPress={()=>void restore()}><Text>重试</Text></Pressable><Pressable accessibilityRole="button" onPress={()=>{setGuest(true);setAuthReady(true);}}><Text>暂不登录，随便看看</Text></Pressable></>}
   </View>;
-  return <SafeAreaProvider><KnowledgeProvider key={`${revision}/${auth?.user.id||'guest'}`}>
+  return <SafeAreaProvider><KnowledgeProvider key={auth?.user.id ?? 'guest'}>
     {!guest && !auth ? <LoginGate onLogin={setAuth} onSkip={()=>setGuest(true)} /> :
-      <CityPulse key={`${revision}/${settings.enabled ? 'demo' : auth?.user.id}`} initialTab={revision > 0 || settings.enabled ? 'map' : startTab} auth={auth} onLogin={session=>{setStartTab('saved');setAuth(session)}} onUserChange={user=>setAuth(current=>current?{...current,user}:current)} onLogout={logout} settings={settings} onApplySettings={apply} />}
+      <CityPulse key={auth?.user.id ?? 'guest'} initialTab={startTab} auth={auth} onLogin={session=>{setStartTab('Saved');setAuth(session)}} onUserChange={user=>setAuth(current=>current?{...current,user}:current)} onLogout={logout} />}
   </KnowledgeProvider></SafeAreaProvider>;
 }
 
@@ -105,25 +74,22 @@ function LoginGate({ onLogin, onSkip }: { onLogin: (session: LoginResponse) => v
   return <View style={[styles.safeArea, { paddingTop: insets.top, paddingBottom: insets.bottom }]}><StatusBar style="dark" /><LoginScreen onLogin={onLogin} onSkip={onSkip} /></View>;
 }
 
-function CityPulse({ initialTab, auth, onLogin, onUserChange, onLogout, settings, onApplySettings }: { initialTab: Tab; auth: LoginResponse | null; onLogin:(session:LoginResponse)=>void; onUserChange:(user:LoginResponse['user'])=>void; onLogout: () => Promise<void>; settings: DebugSettings; onApplySettings: (settings: DebugSettings, replay?: boolean) => Promise<void> }) {
+/** Runs the signed-in app; `auth` identifies the user and `onLogout` ends the session. */
+function CityPulse({ initialTab, auth, onLogin, onUserChange, onLogout }: {
+  initialTab: keyof AppTabParamList; auth: LoginResponse | null;
+  onLogin: (session: LoginResponse) => void; onUserChange: (user: LoginResponse['user']) => void;
+  onLogout: () => Promise<void>;
+}) {
   const layout = layoutForWidth(useWindowDimensions().width);
-  const wide = layout.mode !== 'phone';
-  const verticalNav = layout.mode === 'desktop';
-  const [navPreview,setNavPreview] = useState<number|null>(null);
-  const navSize = useRef({width:300,height:240});
-  const [navMeasured,setNavMeasured]=useState({width:300,height:240});
-  const navPosition=useRef(new Animated.Value(0)).current;
-  const pageOpacity=useRef(new Animated.Value(1)).current;
-  const [reduceMotion,setReduceMotion]=useState(false);
-  useEffect(()=>{void AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion);const listener=AccessibilityInfo.addEventListener('reduceMotionChanged',setReduceMotion);return()=>listener.remove();},[]);
-  const navStart = useRef(0);
-  const suppressNavClick = useRef(0);
+  const [loginOpen, setLoginOpen] = useState(false);
+  const requireLogin = () => {
+    setLoginOpen(true);
+    if (navigationRef.isReady()) navigationRef.navigate('Main', { screen: 'Saved' });
+  };
   const insets = useSafeAreaInsets();
-  const [SAVED_KEY] = useState(() => settings.enabled ? storageKey('saved-events') : `@citypulse/saved-events/${auth?.user.id||'guest'}`);
-  const [SAVED_DATA_KEY] = useState(() => settings.enabled ? storageKey('saved-event-data') : `@citypulse/saved-event-data/${auth?.user.id||'guest'}`);
-  const [tab, setTab] = useState<Tab>(initialTab);
-  const [loginOpen,setLoginOpen]=useState(false);
-  const requireLogin=()=>{setDetail(null);setTab('saved');setLoginOpen(true);};
+  const [SAVED_KEY] = useState(() => `@citypulse/saved-events/${auth?.user.id ?? 'guest'}`);
+  const [SAVED_DATA_KEY] = useState(() => `@citypulse/saved-event-data/${auth?.user.id ?? 'guest'}`);
+  const [activeRoute, setActiveRoute] = useState<keyof AppTabParamList | null>(initialTab);
   const mapSession = useRef<MapSession>({ located: false });
   const [filter, setFilter] = useState<FilterValue>('all');
   const [error, setError] = useState('');
@@ -138,54 +104,22 @@ function CityPulse({ initialTab, auth, onLogin, onUserChange, onLogout, settings
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
   const [savedReady, setSavedReady] = useState(false);
   const savingFavorites = useRef(new Set<string>());
-  const [detail, setDetail] = useState<EventDetail | null>(null);
   const [loading, setLoading] = useState(false);
-  const [detailLoading, setDetailLoading] = useState(false);
   const [offline, setOffline] = useState(true);
   const location = useDeviceLocation();
-  const nearby = useNearbyUpdates(location.status === 'ready' ? location.position : null, tab === 'map');
-  useEffect(() => { if (detail) nearby.view(detail.id); }, [detail?.id, nearby.unread, nearby.view]);
-  const mapData = useMapEvents(mapBounds, tab === 'map');
+  const nearby = useNearbyUpdates(location.status === 'ready' ? location.position : null, activeRoute === 'Map');
+  const mapData = useMapEvents(mapBounds, activeRoute === 'Map');
   const mapPoints = useMemo(() => {
     const base = mapData.offline && nearby.points.length ? [] : mapData.points;
-    const merged = new Map(base.map((point) => [point.id, point]));
-    nearby.points.forEach((point) => merged.set(point.id, point));
+    const merged = new Map<string, MapEvent>(nearby.points.map((point) => [point.id, point]));
+    // A current viewport response includes admin edits; nearby snapshots may be older.
+    base.forEach((point) => merged.set(point.id, point));
     knownEvents.filter((event) => savedIds.has(event.id) && !merged.has(event.id)).forEach((event) => merged.set(event.id, toMapPoint(event)));
     return [...merged.values()];
   }, [mapBounds, knownEvents, savedIds, mapData.points, mapData.offline, nearby.points]);
   const alerts = useActivityAlerts(mapPoints, location.status === 'ready' ? location.position : null);
-  useEffect(() => { if (detail) alerts.view(detail.id); }, [detail?.id, mapPoints, alerts.view]);
   const completedKey = alerts.completedIds.join(',');
   useEffect(() => { if (completedKey) nearby.acknowledge(completedKey.split(',')); }, [completedKey, nearby.acknowledge]);
-
-  useEffect(() => {
-    let active = true;
-    let request = 0;
-    const openSharedEvent = async (url: string | null) => {
-      const id = url ? eventIdFromLink(url) : null;
-      if (!id) return;
-      const current = ++request;
-      setTab('feed');
-      setDetail(null);
-      setDetailLoading(true);
-      try {
-        const event = await getEvent(id);
-        if (active && current === request) {
-          setDetail(event);
-          setKnownEvents((events) => [...events.filter((item) => item.id !== event.id), event]);
-        }
-      } catch {
-        if (active && current === request) Alert.alert('无法打开活动', '活动可能已下架，或网络暂时不可用。请稍后重新打开链接。');
-      } finally {
-        if (active && current === request) setDetailLoading(false);
-      }
-    };
-    const subscription = Linking.addEventListener('url', ({ url }) => { void openSharedEvent(url); });
-    void Linking.getInitialURL().then((url) => {
-      if (active && request === 0) void openSharedEvent(url);
-    }).catch(() => undefined);
-    return () => { active = false; subscription.remove(); };
-  }, []);
 
   useEffect(() => {
     if(!auth){setSavedReady(true);return;}
@@ -193,19 +127,9 @@ function CityPulse({ initialTab, auth, onLogin, onUserChange, onLogout, settings
     AsyncStorage.multiGet([SAVED_KEY, SAVED_DATA_KEY]).then(async (entries) => {
       if(controller.signal.aborted)return;
       const values = new Map(entries);
-      if (DEMO_MODE && values.get(SAVED_KEY) === null) {
-        const response = await fetch(demoURL('/demo'));
-        if (response.ok) {
-          const data = await response.json() as { saved_ids: string[] };
-          const examples = await Promise.all(data.saved_ids.map((id) => getEvent(id)));
-          setSavedIds(new Set(data.saved_ids));
-          setKnownEvents((current) => [...current, ...examples]);
-          return;
-        }
-      }
       const ids: unknown = JSON.parse(values.get(SAVED_KEY) ?? '[]');
       if (Array.isArray(ids)) setSavedIds(new Set(ids.filter((id): id is string => typeof id === 'string')));
-      if (!DEMO_MODE) {
+      if (auth) {
         // One-time migration preserves this account's older local favorites.
         const migrated = await AsyncStorage.getItem(`${SAVED_KEY}/server-v1`);
         if (!migrated && Array.isArray(ids)) {
@@ -224,7 +148,7 @@ function CityPulse({ initialTab, auth, onLogin, onUserChange, onLogout, settings
       const cached: unknown = JSON.parse(values.get(SAVED_DATA_KEY) ?? '[]');
       if (Array.isArray(cached)) setKnownEvents((current) => {
         const merged = new Map(current.map((event) => [event.id, event]));
-        cached.filter((event) => event?.id && event?.location && event?.ends_at && (DEMO_MODE || !event.is_demo))
+        cached.filter((event) => event?.id && event?.location && event?.ends_at)
           .forEach((event: EventSummary) => merged.set(event.id, event));
         return [...merged.values()];
       });
@@ -260,6 +184,7 @@ function CityPulse({ initialTab, auth, onLogin, onUserChange, onLogout, settings
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [savedReady, savedIds]);
 
+  /** Loads one feed page using `nextFilter`, search `q`, date scope, and one-based page number. */
   const load = useCallback(async (nextFilter: FilterValue, q = '', date: 'any' | 'today' | 'weekend' = 'any', pageNumber = 1) => {
     const request = ++feedRequest.current;
     setLoading(true);
@@ -294,224 +219,197 @@ function CityPulse({ initialTab, auth, onLogin, onUserChange, onLogout, settings
     void load(filter, query, when);
   }, [load, auth, filter, query, when]);
 
+  /** Applies `nextFilter` and clears incompatible date filtering for past events. */
   const changeFilter = (nextFilter: FilterValue) => {
     setFilter(nextFilter);
     if (nextFilter === 'past') setWhen('any');
   };
 
+  /** Adds or removes event `id` from the current user's saved set. */
   const toggleSaved = (id: string) => {
     if(!auth){requireLogin();return;}
     if (!savedReady || savingFavorites.current.has(id)) return;
     const save = !savedIds.has(id);
     savingFavorites.current.add(id);
-    void (DEMO_MODE ? Promise.resolve() : saveFavorite(id, save)).then(() => {
+    void saveFavorite(id, save).then(() => {
       setSavedIds(current => {const next=new Set(current);if(save)next.add(id);else next.delete(id);return next});
     }).catch(() => Alert.alert('收藏未更新', '无法连接服务，请稍后重试。')).finally(() => savingFavorites.current.delete(id));
   };
 
   useEffect(() => {
-    if(!auth||tab!=='saved'||DEMO_MODE||!savedReady||savingFavorites.current.size)return;
+    if(!auth||activeRoute!=='Saved'||!savedReady||savingFavorites.current.size)return;
     let active=true;
     void allFavorites().then(ids=>{if(active&&!savingFavorites.current.size)setSavedIds(new Set(ids))}).catch(()=>undefined);
     return()=>{active=false};
-  },[tab,savedReady]);
-
-  const openSummary = async (event: EventSummary) => {
-    setDetail(null);
-    setError('');
-    setDetailLoading(true);
-    try {
-      setDetail(await getEvent(event.id));
-      setOffline(false);
-    } catch {
-      setError('无法加载活动详情，活动可能已下架。请稍后重试。');
-    } finally {
-      setDetailLoading(false);
-    }
-  };
-
-  const openId = async (id: string) => {
-    const summary = knownEvents.find((event) => event.id === id);
-    if (summary) {
-      await openSummary(summary);
-      return;
-    }
-    setDetailLoading(true);
-    try {
-      const event = await getEvent(id);
-      setDetail(event);
-      setKnownEvents((current) => [...current.filter((item) => item.id !== id), event]);
-    } catch {
-      setError('无法加载活动详情，请稍后重试。');
-    } finally {
-      setDetailLoading(false);
-    }
-  };
-
-  const tabs = useMemo(
-    () => [
-      { id: 'feed' as const, icon: '⌁', label: '发现' },
-      { id: 'map' as const, icon: '⌖', label: '探索' },
-      { id: 'saved' as const, icon: '♙', label: '我的' },
-      ...(auth?.user.role === 'admin' ? [{ id: 'admin' as const, icon: '✓', label: '审核' }] : []),
-    ],
-    [auth?.user.role, settings.enabled],
-  );
+  },[activeRoute,savedReady]);
 
 
-  const selectTab = (index:number) => {
-    const item=tabs[index];if(!item)return;
-    setTab(item.id);if(item.id==='feed')void load(filter,query,when);
-  };
-  const navLatest = useRef({index:0,select:selectTab});
-  navLatest.current={index:Math.max(0,tabs.findIndex(item=>item.id===tab||(tab==='settings'&&item.id==='saved'))),select:selectTab};
-  const settleNav=(index:number)=>{
-    navPosition.stopAnimation();
-    if(reduceMotion){navPosition.setValue(index);return;}
-    Animated.spring(navPosition,{toValue:index,damping:24,stiffness:260,mass:0.8,overshootClamping:true,useNativeDriver:true}).start();
-  };
-  useEffect(()=>{settleNav(navLatest.current.index);},[tab,verticalNav,reduceMotion]);
-  useEffect(()=>{
-    pageOpacity.setValue(reduceMotion?1:0.65);
-    const animation=Animated.timing(pageOpacity,{toValue:1,duration:160,useNativeDriver:true});animation.start();
-    return()=>animation.stop();
-  },[tab,reduceMotion]);
-  // Vertical items have fixed height; do not derive their pitch from a stale
-  // measurement left over from the horizontal layout or an admin session.
-  const navPitch=verticalNav?68:(navMeasured.width-10)/tabs.length;
-  const navTranslation=useMemo(()=>navPosition.interpolate({inputRange:[0,tabs.length-1],outputRange:[0,navPitch*(tabs.length-1)],extrapolate:'clamp'}),[navPosition,navPitch,tabs.length]);
-  const navGesture = useMemo(()=>{
-    const position=(dx:number,dy:number)=>Math.max(0,Math.min(tabs.length-1,navStart.current+(verticalNav?dy:dx)/(verticalNav?68:(navSize.current.width-10)/tabs.length)));
-    return PanResponder.create({
-      onMoveShouldSetPanResponderCapture:(_,g)=>Math.abs(verticalNav?g.dy:g.dx)>8&&Math.abs(verticalNav?g.dy:g.dx)>Math.abs(verticalNav?g.dx:g.dy),
-      onPanResponderGrant:()=>{navStart.current=navLatest.current.index;navPosition.stopAnimation();setNavPreview(navStart.current);},
-      onPanResponderMove:(_,g)=>{const value=position(g.dx,g.dy);navPosition.setValue(value);setNavPreview(Math.round(value));},
-      onPanResponderRelease:(_,g)=>{const index=Math.round(position(g.dx,g.dy));suppressNavClick.current=Date.now()+350;setNavPreview(null);settleNav(index);navLatest.current.select(index);},
-      onPanResponderTerminate:()=>{suppressNavClick.current=Date.now()+350;setNavPreview(null);settleNav(navLatest.current.index);},
-    });
-  },[verticalNav,tabs.length,reduceMotion]);
+  /** Opens the detail route for event `id` when navigation is ready. */
+  const openEvent = useCallback((id: string) => {
+    if (navigationRef.isReady()) navigationRef.navigate('EventDetail', { eventId: id });
+  }, []);
+  /** Caches a freshly loaded `event` for saved and map views. */
+  const rememberEvent = useCallback((event: EventDetail) => {
+    setKnownEvents((current) => [...current.filter((item) => item.id !== event.id), event]);
+    setOffline(false);
+  }, []);
+  /** Marks event `id` as viewed in both nearby-update alert systems. */
+  const viewEvent = useCallback((id: string) => {
+    nearby.view(id);
+    alerts.view(id);
+  }, [alerts.view, nearby.view]);
+  /** Mirrors the current tab name so background polling only runs on the map. */
+  const updateActiveRoute = useCallback(() => {
+    const name = navigationRef.getCurrentRoute()?.name;
+    setActiveRoute(name === 'Feed' || name === 'Map' || name === 'Saved' || name === 'Admin' ? name : null);
+  }, []);
 
-  return (
-    <View style={styles.safeArea}>
-      <StatusBar style="dark" />
-      {!!error && <Pressable onPress={() => setError('')}><Text accessibilityRole="alert" style={{ color: '#A12626', padding: 12 }}>{error}</Text></Pressable>}
-      <Animated.View testID={`layout-${layout.mode}`} style={[styles.content, {opacity:pageOpacity}, {marginLeft:tab==='map'?0:layout.rail, marginRight:wide && detail ? layout.detail : 0}, tab !== 'map' && { paddingTop: insets.top, paddingBottom: verticalNav ? insets.bottom : 90 + insets.bottom }]}>
-        {tab === 'admin' && auth?.user.role === 'admin' && (settings.enabled ? <View style={{padding:24,gap:16}}><Text style={{fontSize:24,fontWeight:'700'}}>审批</Text><Text>调试已开启，暂无法审批。正式审批数据保留，关闭调试后可继续处理。</Text><Pressable accessibilityRole="button" onPress={()=>setTab('settings')}><Text>前往设置关闭调试</Text></Pressable></View> : <AdminWorkspace userId={auth.user.id} onChanged={() => { void load(filter, query, when); }} />)}
-        {tab === 'settings' && <SettingsScreen user={auth?.user??null} onUserChange={onUserChange} onLogout={onLogout} onLogin={requireLogin} settings={settings} onApply={onApplySettings} onBack={() => setTab('saved')} />}
-        {tab === 'feed' && (
-          <FeedScreen
-            signedIn={Boolean(auth)} onLogin={requireLogin}
-            onOpenPosterEvent={openId}
-            onSavePosterEvent={async (id) => {
-              if (!savedReady) throw new Error('收藏尚未加载，请稍后重试');
-              const event = await getEvent(id);
-              await saveFavorite(id);
-              setKnownEvents(current => [...current.filter(item => item.id !== id), event]);
-              setSavedIds(current => new Set([...current, id]));
-            }}
-            events={events}
-            query={query}
-            when={when}
-            total={pageMeta.total}
-            hasMore={pageMeta.has_next}
-            moreError={moreError}
-            onSearch={setQuery}
-            onWhenChange={(value) => { setWhen(value); if (value !== 'any' && filter === 'past') setFilter('all'); }}
-            onLoadMore={() => { if (!loading && pageMeta.has_next) void load(filter, query, when, pageMeta.page + 1); }}
-            filter={filter}
-            loading={loading}
-            offline={offline}
-            savedIds={savedIds}
-            onFilterChange={changeFilter}
-            onRefresh={() => load(filter, query, when)}
-            onSelect={openSummary}
-            onToggleSaved={toggleSaved}
-          />
-        )}
-        {tab === 'map' && (
-          <MapScreen
-            session={mapSession.current}
-            points={mapPoints} savedIds={savedIds} loading={mapData.loading}
-            offline={mapData.offline && !nearby.points.length}
-            incomplete={mapData.incomplete || (mapData.offline && nearby.points.length > 0)}
-            onBoundsChange={setMapBounds} onSelectId={openId}
-            position={location.status === 'ready' ? location.position : null} locationStatus={location.status} onLocate={location.retryLocation}
-            newEvents={nearby.events} onSeenEvents={nearby.acknowledge} updatesUnavailable={nearby.unavailable}
-            unreadIds={alerts.unreadIds} haloUntil={alerts.haloUntil} onVisibleEvents={alerts.onVisible}
-            onDemoPublished={nearby.refresh}
-          />
-        )}
-        {tab === 'saved' && (loginOpen&&!auth ? <LoginScreen onLogin={onLogin} onSkip={()=>setLoginOpen(false)}/> :
-          <SavedScreen user={auth?.user??null} onLogin={()=>setLoginOpen(true)} debug={settings.enabled}
-            onSettings={() => setTab('settings')}
-            events={knownEvents}
-            savedIds={savedIds}
-            onSelect={openSummary}
-            onToggleSaved={toggleSaved}
-          />
-        )}
-      </Animated.View>
-      <View testID="page-navigation" {...navGesture.panHandlers} onLayout={e=>{navSize.current=e.nativeEvent.layout;setNavMeasured(e.nativeEvent.layout);}} style={verticalNav ? [styles.sideBar,{top:insets.top+12}] : [styles.tabBar,layout.mode==='tablet'&&{left:16,right:undefined,width:Math.min(360,tabs.length*84+24)}, { bottom: Math.max(12, insets.bottom + 6) }]}>
-        <Animated.View testID="navigation-highlight" pointerEvents="none" style={{position:'absolute',left:6,top:6,width:verticalNav?66:navPitch-4,height:verticalNav?64:50,borderRadius:25,backgroundColor:colors.mint,transform:verticalNav?[{translateY:navTranslation}]:[{translateX:navTranslation}]}} />
-        {tabs.map((item,index) => {
-          const active = navPreview===null ? tab === item.id || (tab === 'settings' && item.id === 'saved') : navPreview===index;
-          return (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityState={{ selected: active }}
-              key={item.id}
-              onPress={() => { if(Date.now()>=suppressNavClick.current)selectTab(index); }}
-              style={({ pressed }) => [verticalNav ? styles.sideTab : styles.tab, pressed && { opacity: 0.7 }]}
+  return <View testID={`layout-${layout.mode}`} style={styles.safeArea}>
+    <StatusBar style="dark" />
+    <NavigationContainer
+      fallback={<View style={styles.loading}><ActivityIndicator color={colors.orange} /></View>}
+      linking={linking}
+      onReady={updateActiveRoute}
+      onStateChange={updateActiveRoute}
+      ref={navigationRef}
+    >
+      <RootStack.Navigator initialRouteName="Main" screenOptions={{ headerShown: false }}>
+        <RootStack.Screen name="Main">
+          {() => <View style={styles.safeArea}>
+            <View style={[styles.accountBar, { paddingTop: Math.max(12, insets.top) }]}>
+              <Text style={styles.accountText}>{auth ? `${auth.user.email} · ${auth.user.role === 'admin' ? '管理员' : '普通用户'}` : '游客浏览'}</Text>
+              {auth && <Pressable accessibilityRole="button" onPress={() => { void onLogout().catch(() => setError('退出失败，请检查网络后重试。')); }}><Text style={{ color: colors.green }}>退出</Text></Pressable>}
+            </View>
+            {!!error && <Pressable onPress={() => setError('')}><Text accessibilityRole="alert" style={styles.error}>{error}</Text></Pressable>}
+            <AppTabs.Navigator
+              initialRouteName={initialTab}
+              backBehavior="history"
+              screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: colors.paper } }}
+              tabBar={(props) => <FloatingTabBar {...props} />}
             >
-              <Svg width={24} height={24} viewBox="0 0 24 24" stroke={active ? colors.orange : '#7B8C89'} strokeWidth={1.8} fill="none" strokeLinecap="round" strokeLinejoin="round">
-                {item.id === 'saved' ? <><Circle cx={12} cy={7} r={4}/><Path d="M4 22v-3a8 8 0 0 1 16 0v3"/></> : item.id === 'map' ?
-                  <><Circle cx={12} cy={12} r={9}/><Path d="m16 8-2.5 5.5L8 16l2.5-5.5Z"/></> :
-                  <><Path d="M4 3h6v8H4zM14 3h6v5h-6zM4 15h6v6H4zM14 12h6v9h-6z"/></>}
-              </Svg>
-              <Text style={[styles.tabLabel, active && styles.tabActive]}>{item.label}</Text>
-            </Pressable>
-          );
-        })}
-      </View>
-      <View pointerEvents={wide && detail ? 'auto' : 'box-none'} style={wide ? {position:'absolute',right:0,top:insets.top,bottom:insets.bottom,width:detail?layout.detail:0,borderLeftWidth:detail?1:0,borderColor:colors.line} : undefined}>
-      <DetailSheet
-        presentation={wide ? 'panel' : 'modal'}
-        key={detail?.id ?? 'closed'}
-        event={detail}
-        loading={detailLoading}
-        saved={detail ? savedIds.has(detail.id) : false}
-        onClose={() => setDetail(null)}
-        onToggleSaved={() => detail && toggleSaved(detail.id)}
-        onSubmitCorrection={async(message) => {
-          if(!auth){requireLogin();throw new Error('请登录后提交纠错');}
-          if(detail)await submitCorrection({ event_id: detail.id, kind: 'other', message });
-        }}
-      />
-      </View>
-      {settings.enabled && settings.monitor && <PerformanceMonitor visible={tab === 'map'} />}
-    </View>
-  );
+              <AppTabs.Screen name="Feed" options={{ title: '发现', tabBarAccessibilityLabel: '发现' }} listeners={{ tabPress: () => { void load(filter, query, when); } }}>
+                {() => <View style={[styles.content, { paddingBottom: layout.rail ? insets.bottom : 90 + insets.bottom, marginLeft: layout.rail }]}><FeedScreen
+                  signedIn={Boolean(auth)} onLogin={requireLogin} onOpenPosterEvent={openEvent}
+                  onSavePosterEvent={async (id) => {
+                    if (!auth) { requireLogin(); throw new Error('请先登录'); }
+                    if (!savedReady) throw new Error('收藏尚未加载，请稍后重试');
+                    const event = await getEvent(id);
+                    await saveFavorite(id);
+                    rememberEvent(event);
+                    setSavedIds(current => new Set([...current, id]));
+                  }}
+                  events={events} query={query} when={when} total={pageMeta.total}
+                  hasMore={pageMeta.has_next} moreError={moreError} onSearch={setQuery}
+                  onWhenChange={(value) => { setWhen(value); if (value !== 'any' && filter === 'past') setFilter('all'); }}
+                  onLoadMore={() => { if (!loading && pageMeta.has_next) void load(filter, query, when, pageMeta.page + 1); }}
+                  filter={filter} loading={loading} offline={offline} savedIds={savedIds}
+                  onFilterChange={changeFilter} onRefresh={() => load(filter, query, when)}
+                  onSelect={(event) => openEvent(event.id)} onToggleSaved={toggleSaved}
+                /></View>}
+              </AppTabs.Screen>
+              <AppTabs.Screen name="Map" options={{ title: '地图', tabBarAccessibilityLabel: '地图' }}>
+                {() => <MapScreen
+                  session={mapSession.current} points={mapPoints} savedIds={savedIds} loading={mapData.loading}
+                  offline={mapData.offline && !nearby.points.length}
+                  incomplete={mapData.incomplete || (mapData.offline && nearby.points.length > 0)}
+                  onBoundsChange={setMapBounds} onSelectId={openEvent}
+                  position={location.status === 'ready' ? location.position : null}
+                  locationStatus={location.status} onLocate={location.retryLocation}
+                  newEvents={nearby.events} onSeenEvents={nearby.acknowledge} updatesUnavailable={nearby.unavailable}
+                  unreadIds={alerts.unreadIds} haloUntil={alerts.haloUntil} onVisibleEvents={alerts.onVisible}
+                />}
+              </AppTabs.Screen>
+              <AppTabs.Screen name="Saved" options={{ title: '我的', tabBarAccessibilityLabel: '我的' }}>
+                {() => <View style={[styles.content, { paddingBottom: layout.rail ? insets.bottom : 90 + insets.bottom, marginLeft: layout.rail }]}>{loginOpen && !auth ? <LoginScreen onLogin={onLogin} onSkip={() => setLoginOpen(false)} /> : <SavedScreen
+                  user={auth?.user ?? null} onLogin={requireLogin}
+                  onSettings={() => navigationRef.navigate('Settings')}
+                  events={knownEvents} savedIds={savedIds}
+                  onSelect={(event) => openEvent(event.id)} onToggleSaved={toggleSaved}
+                />}</View>}
+              </AppTabs.Screen>
+              {auth?.user.role === 'admin' && <AppTabs.Screen name="Admin" options={{ title: '管理', tabBarAccessibilityLabel: '管理' }}>
+                {() => <View style={[styles.content, { paddingBottom: layout.rail ? insets.bottom : 90 + insets.bottom, marginLeft: layout.rail }]}><AdminWorkspace
+                  userId={auth.user.id} onChanged={() => { void load(filter, query, when); }}
+                /></View>}
+              </AppTabs.Screen>}
+            </AppTabs.Navigator>
+          </View>}
+        </RootStack.Screen>
+        <RootStack.Screen name="Settings">
+          {({ navigation }) => <SettingsScreen user={auth?.user ?? null} onUserChange={onUserChange} onLogout={onLogout} onLogin={requireLogin} onBack={() => navigation.goBack()} />}
+        </RootStack.Screen>
+        <RootStack.Screen name="EventDetail" options={{ animation: 'slide_from_bottom', presentation: 'transparentModal', contentStyle: { backgroundColor: 'transparent' } }}>
+          {(props) => <EventDetailRoute
+            {...props} savedIds={savedIds} onToggleSaved={toggleSaved}
+            onLoaded={rememberEvent} onViewed={viewEvent} signedIn={Boolean(auth)} onLogin={requireLogin}
+          />}
+        </RootStack.Screen>
+      </RootStack.Navigator>
+    </NavigationContainer>
+  </View>;
+}
+
+type EventDetailRouteProps = NativeStackScreenProps<RootStackParamList, 'EventDetail'> & {
+  savedIds: ReadonlySet<string>;
+  onToggleSaved: (id: string) => void;
+  onLoaded: (event: EventDetail) => void;
+  onViewed: (id: string) => void;
+  signedIn: boolean; onLogin: () => void;
+};
+
+/** Loads and displays the event selected by the detail route's `eventId` parameter. */
+function EventDetailRoute({ route, navigation, savedIds, onToggleSaved, onLoaded, onViewed, signedIn, onLogin }: EventDetailRouteProps) {
+  const insets = useSafeAreaInsets();
+  const layout = layoutForWidth(useWindowDimensions().width);
+  const panelStyle = layout.detail ? { width: layout.detail, alignSelf: 'flex-end' as const, borderLeftWidth: 1, borderColor: colors.line } : undefined;
+  const [event, setEvent] = useState<EventDetail | null>(null);
+  const [error, setError] = useState('');
+  /** Closes detail through history, falling back to Feed for direct deep links. */
+  const close = () => navigation.canGoBack() ? navigation.goBack() : navigation.replace('Main', { screen: 'Feed' });
+  useEffect(() => {
+    const controller = new AbortController();
+    setEvent(null);
+    setError('');
+    void getEvent(route.params.eventId, controller.signal).then((next) => {
+      if (controller.signal.aborted) return;
+      setEvent(next);
+      onLoaded(next);
+      onViewed(next.id);
+    }).catch((reason) => {
+      if (!controller.signal.aborted && !(reason instanceof Error && reason.name === 'AbortError')) {
+        setError('活动可能已下架，或网络暂时不可用。请稍后重试。');
+      }
+    });
+    return () => controller.abort();
+  }, [route.params.eventId, onLoaded, onViewed]);
+
+  if (!event) return <View style={[styles.detailState, panelStyle, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
+    {error ? <>
+      <Text accessibilityRole="alert" style={styles.detailError}>{error}</Text>
+      <Pressable accessibilityRole="button" onPress={close} style={styles.closeButton}><Text style={styles.closeButtonText}>返回</Text></Pressable>
+    </> : <ActivityIndicator color={colors.orange} />}
+  </View>;
+  return <View pointerEvents="box-none" style={{ flex: 1 }}><View style={[styles.safeArea, panelStyle, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
+    <DetailSheet
+      event={event} loading={false} saved={savedIds.has(event.id)} onClose={close}
+      onToggleSaved={() => onToggleSaved(event.id)}
+      onSubmitCorrection={async (message) => {
+        if (!signedIn) { onLogin(); throw new Error('请登录后提交纠错'); }
+        await submitCorrection({ event_id: event.id, kind: 'other', message });
+      }}
+    />
+  </View></View>;
 }
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: colors.paper },
   content: { flex: 1 },
-  sideBar: {overflow:'hidden',...(Platform.OS==='web'?{touchAction:'none' as const}:{}),position:'absolute',left:12,width:80,maxWidth:80,backgroundColor:'rgba(255,255,255,0.94)',borderWidth:1,borderColor:colors.line,padding:6,gap:4,borderRadius:32,shadowColor:'#183A35',shadowOpacity:0.14,shadowRadius:14,shadowOffset:{width:0,height:4},elevation:8},
-  sideTab: {height:64,alignItems:'center',justifyContent:'center',gap:4,borderRadius:25},
+  loading: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.paper },
   accountBar: { flexDirection: 'row', padding: 12, gap: 12, borderBottomWidth: 1, borderColor: colors.line },
   accountText: { flex: 1, color: colors.inkMuted, fontSize: 12 },
-  tabBar: {
-    ...(Platform.OS==='web'?{touchAction:'none' as const}:{}),
-    position: 'absolute', left: 24, right: 24, height: 64,
-    backgroundColor: 'rgba(255,255,255,0.94)', borderRadius: 32,
-    borderColor: 'rgba(220,229,225,0.7)', borderWidth: 1,
-    shadowColor: '#183A35', shadowOpacity: 0.14, shadowRadius: 18, shadowOffset: { width: 0, height: 6 }, elevation: 8,
-    flexDirection: 'row',
-    padding: 6,
-    gap: 4,
-  },
-  tab: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  tabIcon: { color: '#7B8C89', fontSize: 25, lineHeight: 27 },
-  tabLabel: { color: '#7B8C89', fontSize: 11, fontWeight: '800', marginTop: 2 },
-  tabActive: { color: colors.orange },
+  error: { color: '#A12626', padding: 12 },
+  detailState: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 18, paddingHorizontal: 28, backgroundColor: colors.paper },
+  detailError: { color: '#A12626', fontSize: 15, lineHeight: 22, textAlign: 'center' },
+  closeButton: { backgroundColor: colors.ink, borderRadius: 12, paddingHorizontal: 24, paddingVertical: 12 },
+  closeButtonText: { color: colors.white, fontWeight: '800' },
 });

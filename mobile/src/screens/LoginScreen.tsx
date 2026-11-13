@@ -4,6 +4,7 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput }
 import { lastAccount, register, signIn } from '../api/client';
 import type { LoginResponse } from '../api/types';
 import { colors } from '../theme';
+import { RequiredHint, RequiredMark } from '../components/RequiredField';
 
 export function LoginScreen({ onLogin, onSkip }: { onLogin: (session: LoginResponse) => void; onSkip?:()=>void }) {
   const [email, setEmail] = useState('');
@@ -17,6 +18,7 @@ export function LoginScreen({ onLogin, onSkip }: { onLogin: (session: LoginRespo
   const [creating, setCreating] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  /** Validates credentials, optionally registers, then signs the user in. */
   const submit = async () => {
     if (busy) return;
     const normalizedEmail = email.trim();
@@ -39,9 +41,10 @@ export function LoginScreen({ onLogin, onSkip }: { onLogin: (session: LoginRespo
     <Text style={styles.brand}>CITYPULSE · 长沙</Text>
     <Text style={styles.title}>{creating ? '创建账号' : '欢迎回来'}</Text>
     <Text style={styles.copy}>无需登录也能浏览活动与地图。登录后可同步收藏、识别海报。</Text>
-    <Text style={styles.label}>邮箱</Text>
+    <RequiredHint />
+    <Text style={styles.label}>邮箱<RequiredMark /></Text>
     <TextInput accessibilityLabel="邮箱" autoCapitalize="none" autoComplete="email" keyboardType="email-address" value={email} onChangeText={value=>{emailEdited.current=true;setEmail(value);}} style={styles.input} />
-    <Text style={styles.label}>密码（12–128 个字符）</Text>
+    <Text style={styles.label}>密码（12–128 个字符）<RequiredMark /></Text>
     <TextInput accessibilityLabel="密码" autoCapitalize="none" autoComplete={creating ? 'new-password' : 'current-password'} secureTextEntry value={password} onChangeText={setPassword} maxLength={128} style={styles.input} onSubmitEditing={() => { void submit(); }} />
     {!!error && <Text accessibilityRole="alert" style={styles.error}>{error}</Text>}
     <Pressable accessibilityRole="button" disabled={busy} onPress={submit}

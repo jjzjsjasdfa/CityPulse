@@ -3,6 +3,10 @@ import { distanceKm, projectPoint, type MapSize } from './geo';
 import type { MapRegion } from './presentation';
 export interface MarkerSlot { x: number; y: number; events: MapEvent[] }
 // Only close coordinates with overlapping dots share a full-name slot.
+/**
+ * Groups nearly identical `points` into slots for `region`/`size`, prioritizing `saved` IDs.
+ * `names` and `detailed` enable grouping; layout edge arguments are retained for callers.
+ */
 export function markerSlots(points: MapEvent[], region: MapRegion, size: MapSize, saved: ReadonlySet<string>, _width: number, names: boolean, detailed: boolean, _top = 80, _bottom = 110) {
   const slots: MarkerSlot[] = [], grid = new Map<string, number[]>();
   for (const point of [...points].sort((a,b) => Number(saved.has(b.id))-Number(saved.has(a.id)) || a.id.localeCompare(b.id))) {

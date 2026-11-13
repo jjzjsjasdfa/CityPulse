@@ -63,7 +63,6 @@ def _summary(event: Event, now: datetime | None = None) -> EventSummary:
         confidence=event.confidence,
         attributes=event.traits,
         is_ad=event.is_ad,
-        is_demo=event.is_demo,
         is_new=_is_new(event, current),
         is_ending_soon=_is_ending_soon(event, current),
     )
@@ -95,7 +94,7 @@ def list_events(
     now = datetime.now(UTC)
     conditions = [
         Event.is_published.is_(True),
-        Event.is_demo.is_(False),
+        Event.archived_at.is_(None),
         Event.city == city,
         Event.ends_at < now if time_scope == "past" else Event.ends_at >= now,
     ]
@@ -178,7 +177,7 @@ def map_events(
     geometry = cast(Event.location, Geometry(geometry_type="POINT", srid=4326))
     conditions = [
         Event.is_published.is_(True),
-        Event.is_demo.is_(False),
+        Event.archived_at.is_(None),
         Event.ends_at > now,
         func.ST_Intersects(geometry, envelope),
     ]
@@ -228,7 +227,7 @@ def nearby_updates(
     session: SessionDep,
     latitude: float = Query(ge=-85, le=85),
     longitude: float = Query(ge=-180, le=180),
-    radius_km: float = Query(default=15, gt=0, le=15),
+    radius_km: float = Query(default=15, gt=0, le=30),
     since: datetime | None = None,
     until: datetime | None = None,
     offset: int = Query(default=0, ge=0),
@@ -247,13 +246,14 @@ def nearby_updates(
         select(Event)
         .where(
             Event.is_published.is_(True),
-            Event.is_demo.is_(False),
+            Event.archived_at.is_(None),
             Event.ends_at > now,
             Event.published_at >= start,
             Event.published_at <= checked_at,
             Event.status.notin_([EventStatus.ended, EventStatus.cancelled, EventStatus.postponed]),
-            func.ST_DWithin(Event.location, cast(origin, Event.__table__.c.location.type),
-                            radius_km * 1000),
+            func.ST_DWithin(
+                Event.location, cast(origin, Event.__table__.c.location.type), radius_km * 1000
+            ),
         )
         .order_by(Event.published_at, Event.id)
         .offset(offset)
@@ -262,13 +262,23 @@ def nearby_updates(
     has_next = len(rows) > limit
     rows = rows[:limit]
     return NearbyEventsResponse(
-        data=[NearbyEvent(
-            id=event.id, name=event.name, category=event.category, status=event.status,
-            starts_at=event.starts_at, ends_at=event.ends_at, published_at=event.published_at,
-            latitude=event.latitude, longitude=event.longitude,
-        ) for event in rows],
-        meta=MapPageMeta(count=len(rows), has_next=has_next,
-                         next_offset=offset + len(rows) if has_next else None),
+        data=[
+            NearbyEvent(
+                id=event.id,
+                name=event.name,
+                category=event.category,
+                status=event.status,
+                starts_at=event.starts_at,
+                ends_at=event.ends_at,
+                published_at=event.published_at,
+                latitude=event.latitude,
+                longitude=event.longitude,
+            )
+            for event in rows
+        ],
+        meta=MapPageMeta(
+            count=len(rows), has_next=has_next, next_offset=offset + len(rows) if has_next else None
+        ),
         checked_at=checked_at,
     )
 
@@ -276,7 +286,7 @@ def nearby_updates(
 @router.get("/{event_id}", response_model=EventDetailResponse)
 def get_event(event_id: UUID, session: SessionDep) -> EventDetailResponse:
     event = session.get(Event, event_id)
-    if event is None or not event.is_published or event.is_demo:
+    if event is None or not event.is_published or event.archived_at is not None:
         raise HTTPException(status_code=404, detail="Event not found")
 
     evidence_rows = session.exec(

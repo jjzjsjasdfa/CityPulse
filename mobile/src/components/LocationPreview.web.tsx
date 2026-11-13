@@ -1,6 +1,7 @@
 import { Text, View } from 'react-native';
 import type { PreviewProps } from './LocationPreview';
 
+/** Validates string coordinates and previews their marker in an OpenStreetMap iframe. */
 export function LocationPreview({ latitude, longitude }: PreviewProps) {
   const lat = Number(latitude), lon = Number(longitude);
   if (!latitude.trim() || !longitude.trim() || !Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) return <View style={{ height: 260 }}><Text>补齐有效坐标后可预览地点。</Text></View>;

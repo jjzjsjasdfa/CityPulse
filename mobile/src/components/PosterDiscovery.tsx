@@ -5,14 +5,13 @@ import { getPoster, posterHistory, uploadPoster, type PosterResult } from '../ap
 import { References } from './ArtistInfo';
 import {EntryReference,EventSearch,LinkedName} from './Knowledge';
 import { colors } from '../theme';
-import { DEMO_MODE } from '../demo';
 const statuses:Record<string,string>={pending:'待审核',approved:'已通过',rejected:'未通过'};
 export function PosterDiscovery({onSave,onOpen}:{onSave:(id:string)=>Promise<void>;onOpen:(id:string)=>void}) {
   const [result,setResult]=useState<PosterResult|null>(null),[history,setHistory]=useState<PosterResult[]>([]);
   const [shareText,setShareText]=useState('');
   const [busy,setBusy]=useState(false),[notice,setNotice]=useState(''),[error,setError]=useState(''),[preview,setPreview]=useState('');
   const mounted=useRef(true);
-  useEffect(()=>{mounted.current=true;if(!DEMO_MODE)void posterHistory().then(setHistory).catch(()=>undefined);return()=>{mounted.current=false}},[]);
+  useEffect(()=>{mounted.current=true;void posterHistory().then(setHistory).catch(()=>undefined);return()=>{mounted.current=false}},[]);
   const show=async(value:PosterResult)=>{
     if(!mounted.current)return;setResult(value);setShareText('');
     if(value.auto_save_id){try{await onSave(value.auto_save_id);setNotice('已找到对应活动，并加入你的收藏。')}catch{setError('已识别，但收藏失败，请点击匹配活动重试。')}}
@@ -32,8 +31,8 @@ export function PosterDiscovery({onSave,onOpen}:{onSave:(id:string)=>Promise<voi
   };
   return <View style={s.card}><Text style={s.eyebrow}>从一张海报，认识一场活动</Text><Text style={s.title}>发现海报里的活动</Text>
     <Text style={s.copy}>上传活动海报，了解时间、地点和参与者，找到地图上的活动。</Text>
-    <Pressable accessibilityRole="button" disabled={busy||DEMO_MODE} onPress={()=>void upload()} style={s.button}><Text style={s.buttonText}>{busy?'正在识别海报…':'＋ 上传活动海报'}</Text></Pressable>
-    <Text style={s.hint}>{DEMO_MODE?'请关闭调试模式并登录后使用。':'支持 JPG / PNG / WebP，最大 8 MB。上传后保存至你的识别记录，并提交管理员核实。'}</Text>
+    <Pressable accessibilityRole="button" disabled={busy} onPress={()=>void upload()} style={s.button}><Text style={s.buttonText}>{busy?'正在识别海报…':'＋ 上传活动海报'}</Text></Pressable>
+    <Text style={s.hint}>支持 JPG / PNG / WebP，最大 8 MB。上传后保存至你的识别记录，并提交管理员核实。</Text>
     {!!preview&&<Image source={{uri:preview}} style={{height:150,width:'100%',marginTop:12}} resizeMode="contain"/>}{busy&&<ActivityIndicator color={colors.orange} style={{margin:12}}/>}
     {!!error&&<Text accessibilityRole="alert" style={s.error}>{error}</Text>}{!!notice&&<Text style={s.notice}>{notice}</Text>}
     {result&&<View style={{gap:12,marginTop:16}}><Text style={s.heading}>{result.extracted.name||'活动名称未识别'}</Text><Text style={s.hint}>海报识别结果 · {statuses[result.status]}</Text>
